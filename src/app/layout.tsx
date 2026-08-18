@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import { IBM_Plex_Mono, Instrument_Sans, Instrument_Serif } from "next/font/google";
+import "./globals.css";
+
+/**
+ * Three faces, three jobs: the serif for anything that is a headline or a
+ * number you are meant to feel, the sans for prose, the mono for kickers,
+ * axis labels and machine output. Loaded through `next/font` so they are
+ * self-hosted — a report page that phones Google for a font is not a report
+ * page that "never leaves your machine".
+ */
+const serif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+  display: "swap",
+});
+
+const sans = Instrument_Sans({
+  subsets: ["latin"],
+  variable: "--font-instrument-sans",
+  display: "swap",
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "Telescope:",
+  description: "What a year of one conversation actually looked like.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
+      <body>{children}</body>
+    </html>
+  );
+}

@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+
+*.tsbuildinfo
+next-env.d.ts
+src/generated/prisma/
+
+.env
+.env.local
+.env*.local
+
+.DS_Store
+*.pem
+npm-debug.log*
+
+# Chat exports and anything derived from one. These contain the actual
+# conversation — they do not belong in version control, ever.
+result.json
+ChatExport*/
+*.wrapped.json

@@ -1,0 +1,117 @@
+import { ReportStatus, Prisma } from "@/generated/prisma/client";
+import type { Analysis } from "@/domain/types";
+import type { WirePayload } from "@/ui/wire";
+import { prisma } from "@/lib/prisma";
+
+const PROCESSING_TTL_MS = 30 * 60 * 1000;
+
+export async function saveLocalReport(userId: string, analysis: Analysis) {
+  const data = {
+      userId,
+      chatId: String(analysis.chat.id),
+      status: ReportStatus.COMPLETE,
+      title: `${analysis.chat.participants[0]} & ${analysis.chat.participants[1]}`,
+      participantA: analysis.chat.participants[0],
+      participantB: analysis.chat.participants[1],
+      firstTs: Math.round(analysis.span.firstTs),
+      lastTs: Math.round(analysis.span.lastTs),
+      analysis: json(analysis),
+      llm: Prisma.DbNull,
+      completedAt: new Date(),
+    } satisfies Prisma.ReportUncheckedCreateInput;
+  return prisma.report.upsert({
+    where: { userId_chatId: { userId, chatId: String(analysis.chat.id) } },
+    create: data,
+    update: {
+      status: data.status,
+      title: data.title,
+      participantA: data.participantA,
+      participantB: data.participantB,
+      firstTs: data.firstTs,
+      lastTs: data.lastTs,
+      analysis: data.analysis,
+      llm: Prisma.DbNull,
+      completedAt: data.completedAt,
+    },
+    select: { id: true },
+  });
+}
+
+/** Mark a saved local report as processing, or create a fresh processing report. */
+export async function reserveReport(userId: string, analysis: Analysis, savedReportId?: string): Promise<string | null> {
+  const staleBefore = new Date(Date.now() - PROCESSING_TTL_MS);
+  return prisma.$transaction(async (tx) => {
+    await tx.report.updateMany({
+      where: { userId, status: ReportStatus.PROCESSING, completedAt: { lt: staleBefore }, analysis: { not: Prisma.DbNull } },
+      data: { status: ReportStatus.COMPLETE },
+    });
+    await tx.report.deleteMany({
+      where: { userId, status: ReportStatus.PROCESSING, createdAt: { lt: staleBefore }, analysis: { equals: Prisma.DbNull } },
+    });
+    if (savedReportId) {
+      const claimed = await tx.report.updateMany({
+        where: { id: savedReportId, userId, status: ReportStatus.COMPLETE, llm: { equals: Prisma.DbNull } },
+        data: { status: ReportStatus.PROCESSING, completedAt: new Date() },
+      });
+      return claimed.count === 1 ? savedReportId : null;
+    }
+    const existing = await tx.report.findUnique({
+      where: { userId_chatId: { userId, chatId: String(analysis.chat.id) } },
+      select: { id: true },
+    });
+    if (existing) {
+      await tx.report.update({
+        where: { id: existing.id },
+        data: {
+          status: ReportStatus.PROCESSING,
+          title: `${analysis.chat.participants[0]} & ${analysis.chat.participants[1]}`,
+          participantA: analysis.chat.participants[0],
+          participantB: analysis.chat.participants[1],
+          firstTs: Math.round(analysis.span.firstTs),
+          lastTs: Math.round(analysis.span.lastTs),
+          llm: Prisma.DbNull,
+          completedAt: new Date(),
+        },
+      });
+      return existing.id;
+    }
+    const report = await tx.report.create({
+      data: {
+        userId,
+        chatId: String(analysis.chat.id),
+        title: `${analysis.chat.participants[0]} & ${analysis.chat.participants[1]}`,
+        participantA: analysis.chat.participants[0],
+        participantB: analysis.chat.participants[1],
+        firstTs: Math.round(analysis.span.firstTs),
+        lastTs: Math.round(analysis.span.lastTs),
+      },
+      select: { id: true },
+    });
+    return report.id;
+  });
+}
+
+const json = (value: unknown): Prisma.InputJsonValue =>
+  JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+
+export async function completeReport(id: string, userId: string, analysis: Analysis, llm: WirePayload) {
+  await prisma.report.update({
+    where: { id, userId },
+    data: {
+      status: ReportStatus.COMPLETE,
+      analysis: json(analysis),
+      llm: json(llm),
+      completedAt: new Date(),
+    },
+  });
+}
+
+export async function releaseReport(id: string, userId: string) {
+  const report = await prisma.report.findFirst({ where: { id, userId, status: ReportStatus.PROCESSING }, select: { analysis: true } });
+  if (!report) return;
+  if (report.analysis) {
+    await prisma.report.update({ where: { id }, data: { status: ReportStatus.COMPLETE } });
+  } else {
+    await prisma.report.delete({ where: { id } });
+  }
+}

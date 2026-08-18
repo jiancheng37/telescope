@@ -1,0 +1,402 @@
+@import "tailwindcss";
+
+/**
+ * Telescope's design tokens.
+ *
+ * Lifted from the Telegram-adjacent palette in the UI mockups: a light paper
+ * canvas with dark "night" panels punched into it, and one accent that has two
+ * values — a darker blue that passes on white, a brighter one that reads on the
+ * night panels. Using the wrong one is the most common way this palette breaks,
+ * hence the two names.
+ *
+ * Every grey in the design is the ink colour at some alpha, never a separate
+ * hue, so `text-ink/60` and `border-ink/13` are the greys — there are no
+ * `--color-muted`-style tokens to drift out of sync.
+ */
+@theme {
+  /*
+   * Side 0 is warm, side 1 is cool, everywhere and without exception. In a
+   * Telegram export side 0 is the counterpart and side 1 is you, so on screen
+   * the other person is the red and you are the teal. Reversing this in one
+   * chart makes every other chart a lie.
+   */
+  --color-side-a: #e15052;
+  --color-side-b: #27acce;
+
+  --color-canvas: #e4e9ee;
+  --color-surface: #ffffff;
+  --color-card: #f7f9fb;
+  --color-shade: #f0f2f5;
+  --color-night: #0e1621;
+  --color-ink: #17212b;
+
+  /** on light */
+  --color-accent: #168acd;
+  /** on night */
+  --color-accent-lit: #2aabee;
+
+  --color-safe: #12a489;
+  --color-safe-deep: #0b6357;
+  --color-safe-lit: #4fd1b9;
+  --color-warn: #e0802b;
+
+  /*
+   * The `--font-*-*` variables come from `next/font` in layout.tsx. The second
+   * argument is the fallback for any context that renders this CSS without the
+   * font loader having run.
+   */
+  --font-display: var(--font-instrument-serif, "Instrument Serif"), ui-serif, Georgia, serif;
+  --font-sans: var(--font-instrument-sans, "Instrument Sans"), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono, "IBM Plex Mono"), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/**
+ * The night panels are meant to look like sky. Five fixed radial gradients
+ * rather than generated stars, because they have to survive server rendering
+ * and reduced-motion without moving.
+ */
+.starfield::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 78% 14%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 42% 72%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 91% 62%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 27% 48%, rgba(255, 255, 255, 0.3), transparent);
+}
+
+/** Numbers that change in place — a progress percentage — must not reflow. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes report-reveal {
+  from { opacity: 0.35; filter: blur(14px); transform: translateY(18px) scale(1.018); clip-path: inset(0 0 100% 0 round 24px); }
+  to { opacity: 1; filter: blur(0); transform: none; clip-path: inset(0 0 0 0 round 0); }
+}
+.report-reveal { animation: report-reveal 900ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes orbit-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(42, 171, 238, 0.08); transform: scale(1); }
+  50% { box-shadow: 0 0 0 22px rgba(42, 171, 238, 0); transform: scale(1.025); }
+}
+.loading-orbit { animation: orbit-pulse 1.4s ease-in-out infinite; }
+
+@keyframes loading-copy-enter {
+  from { opacity: 0.35; transform: translateY(8px); filter: blur(3px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.loading-copy-enter { animation: loading-copy-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes result-stat-in {
+  from { opacity: 0; transform: translateY(14px); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.result-stat-enter { animation: result-stat-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes result-stat-progress {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.result-stat-progress { animation: result-stat-progress 3.6s linear both; }
+
+.cover-frame { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025); }
+
+/* Carry the cover's midnight material through report screens while preserving
+ * the semantic colour classes used by charts, quotes, and data panels. */
+.report-night-slide {
+  --color-ink: #f3f7fb;
+  --color-surface: #0e1621;
+  --color-card: #13202d;
+  --color-shade: #172634;
+  --color-accent: #2aabee;
+  --color-safe-deep: #4fd1b9;
+  color: rgba(255, 255, 255, 0.9);
+}
+.report-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  padding: 0.65rem 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.report-action-button:hover { border-color: var(--color-accent-lit); color: white; transform: translateY(-1px); }
+.report-action-button:disabled { cursor: wait; opacity: 0.5; }
+.wrapped-finale-actions .report-action-button {
+  min-height: 48px;
+  border-radius: 999px;
+  padding: 0.875rem 1.5rem;
+}
+
+/* Wrapped motion language: the screen arrives first, then typography, then data.
+ * Forward and reverse navigation travel in opposite directions so it feels like
+ * turning through a story instead of swapping visible divs. */
+@keyframes wrapped-screen-forward {
+  from { clip-path: inset(0 0 0 100%); transform: scale(1.045) rotate(0.35deg); filter: saturate(1.45) brightness(1.12); }
+  to { clip-path: inset(0); transform: scale(1) rotate(0); filter: saturate(1) brightness(1); }
+}
+@keyframes wrapped-screen-reverse {
+  from { clip-path: inset(0 100% 0 0); transform: scale(1.045) rotate(-0.35deg); filter: saturate(1.45) brightness(1.12); }
+  to { clip-path: inset(0); transform: scale(1) rotate(0); filter: saturate(1) brightness(1); }
+}
+.wrapped-screen { opacity: 1; transition: opacity 420ms ease, transform 650ms cubic-bezier(.16,1,.3,1), filter 420ms ease; }
+.wrapped-screen.wrapped-active.wrapped-forward { animation: wrapped-screen-forward 860ms cubic-bezier(.76,0,.24,1) both; }
+.wrapped-screen.wrapped-active.wrapped-reverse { animation: wrapped-screen-reverse 860ms cubic-bezier(.76,0,.24,1) both; }
+.wrapped-screen.wrapped-inactive { opacity: 0; transform: scale(.955); filter: blur(12px) saturate(.75); }
+
+@keyframes wrapped-copy-rise {
+  from { opacity: 0; transform: translateY(38px) skewY(2deg); filter: blur(9px); }
+  to { opacity: 1; transform: translateY(0) skewY(0); filter: blur(0); }
+}
+@keyframes wrapped-detail-rise {
+  from { opacity: 0; transform: translateY(22px); filter: blur(5px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.wrapped-active .wrapped-content h1,
+.wrapped-active .wrapped-content h2 {
+  animation: wrapped-copy-rise 820ms 180ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content h3,
+.wrapped-active .wrapped-content header > p,
+.wrapped-active .wrapped-content > div > p:first-child {
+  animation: wrapped-detail-rise 620ms 100ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content h1 + p,
+.wrapped-active .wrapped-content h2 + p,
+.wrapped-active .wrapped-content header + * {
+  animation: wrapped-detail-rise 680ms 380ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content dl,
+.wrapped-active .wrapped-content ol,
+.wrapped-active .wrapped-content ul,
+.wrapped-active .wrapped-content article,
+.wrapped-active .wrapped-content aside {
+  animation: wrapped-detail-rise 720ms 460ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content li,
+.wrapped-active .wrapped-content dl > div {
+  animation: wrapped-detail-rise 620ms 460ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content li:nth-child(2),
+.wrapped-active .wrapped-content dl > div:nth-child(2) { animation-delay: 540ms; }
+.wrapped-active .wrapped-content li:nth-child(3),
+.wrapped-active .wrapped-content dl > div:nth-child(3) { animation-delay: 620ms; }
+.wrapped-active .wrapped-content li:nth-child(4),
+.wrapped-active .wrapped-content dl > div:nth-child(4) { animation-delay: 700ms; }
+
+@keyframes wrapped-bar-grow {
+  from { transform: scaleY(.03); opacity: .2; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+.wrapped-active .wrapped-content span[style*="height"] {
+  transform-origin: bottom;
+  animation: wrapped-bar-grow 900ms 460ms cubic-bezier(.16,1,.3,1) both;
+}
+.wrapped-active .wrapped-content span[style*="height"]:nth-child(3n + 2) { animation-delay: 500ms; }
+.wrapped-active .wrapped-content span[style*="height"]:nth-child(3n) { animation-delay: 540ms; }
+
+.wrapped-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: .7; }
+.wrapped-orbit { position: absolute; width: min(52vw, 720px); aspect-ratio: 1; right: -16%; top: -32%; border: 1px solid rgba(42,171,238,.22); border-radius: 999px; box-shadow: 0 0 120px rgba(42,171,238,.09) inset; animation: wrapped-orbit-drift 12s ease-in-out infinite alternate; }
+.wrapped-orbit-two { width: min(30vw, 420px); left: -9%; right: auto; bottom: -22%; top: auto; border-color: rgba(79,209,185,.18); animation-duration: 16s; animation-direction: alternate-reverse; }
+.wrapped-sweep { position: absolute; left: -30%; top: 48%; width: 52%; height: 1px; background: linear-gradient(90deg, transparent, rgba(42,171,238,.58), transparent); transform: rotate(-18deg); animation: wrapped-sweep 7s 1s ease-in-out infinite; }
+@keyframes wrapped-orbit-drift { to { transform: translate(-8%, 12%) scale(1.08) rotate(12deg); } }
+@keyframes wrapped-sweep { 0%, 20% { transform: translateX(-15vw) rotate(-18deg); opacity: 0; } 45% { opacity: .9; } 75%, 100% { transform: translateX(150vw) rotate(-18deg); opacity: 0; } }
+.wrapped-variant-1 .wrapped-orbit { right: auto; left: -14%; top: -28%; }
+.wrapped-variant-1 .wrapped-orbit-two { left: auto; right: -5%; }
+.wrapped-variant-2 .wrapped-orbit { top: auto; bottom: -38%; right: 8%; }
+.wrapped-variant-3 .wrapped-orbit { width: min(68vw, 900px); right: -25%; top: 8%; }
+.wrapped-screen.bg-surface .wrapped-atmosphere,
+.wrapped-screen.bg-shade .wrapped-atmosphere { opacity: .32; mix-blend-mode: multiply; }
+
+@keyframes wrapped-progress-flare {
+  from { filter: brightness(2.1); box-shadow: 0 0 20px rgba(42,171,238,.95); }
+  to { filter: brightness(1); box-shadow: 0 0 0 rgba(42,171,238,0); }
+}
+.wrapped-progress-fill { animation: wrapped-progress-flare 720ms ease-out both; }
+
+/* The era screen is a route, not a ranked list. Every detected era remains in
+ * chronological order, with alternating copy keeping six stops legible in one
+ * viewport. On narrow screens the same route turns vertically. */
+.era-timeline {
+  --era-count: 1;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--era-count), minmax(0, 1fr));
+  height: clamp(250px, 38vh, 350px);
+  list-style: none;
+}
+.era-timeline::before {
+  content: "";
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: 50%;
+  height: 1px;
+  transform-origin: left;
+  background: linear-gradient(90deg, rgba(23,33,43,.16), var(--color-accent), rgba(23,33,43,.22));
+}
+.era-stop { position: relative; min-width: 0; }
+.era-stop-node {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 5px solid var(--color-surface);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px rgba(23,33,43,.14);
+  transition: transform 220ms cubic-bezier(.16,1,.3,1), box-shadow 220ms ease;
+}
+.era-stop-node > span { font-family: var(--font-mono); font-size: 7px; color: white; letter-spacing: .06em; }
+.era-stop-copy {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  min-width: 0;
+  padding: 12px 4px;
+  transition: transform 220ms cubic-bezier(.16,1,.3,1), color 180ms ease;
+}
+.era-stop-above .era-stop-copy { bottom: calc(50% + 24px); border-bottom: 2px solid; }
+.era-stop-below .era-stop-copy { top: calc(50% + 24px); border-top: 2px solid; }
+.era-stop:hover .era-stop-node { transform: translate(-50%, -50%) scale(1.22); box-shadow: 0 0 0 5px rgba(42,171,238,.12); }
+.era-stop:hover .era-stop-copy { transform: translateY(-3px); }
+.era-stop-date,
+.era-stop-volume,
+.era-stop-change,
+.era-stop-latest { font-family: var(--font-mono); text-transform: uppercase; }
+.era-stop-date { font-size: 8px; letter-spacing: .1em; color: rgba(23,33,43,.42); }
+.era-stop-copy h3 { margin-top: 6px; overflow: hidden; color: var(--color-ink); font-family: var(--font-display); font-size: clamp(18px, 1.8vw, 27px); line-height: .96; text-overflow: ellipsis; white-space: nowrap; }
+.era-stop-volume { margin-top: 7px; font-size: 8px; letter-spacing: .04em; color: rgba(23,33,43,.48); }
+.era-stop-change { margin-top: 6px; overflow: hidden; font-size: 8px; color: rgba(23,33,43,.7); text-overflow: ellipsis; white-space: nowrap; }
+.era-stop-latest { display: inline-block; margin-top: 7px; border: 1px solid rgba(23,33,43,.2); border-radius: 999px; padding: 3px 6px; font-size: 7px; letter-spacing: .12em; color: rgba(23,33,43,.58); }
+
+@keyframes era-route-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes era-stop-arrive { from { opacity: 0; transform: translateY(16px) scale(.94); } to { opacity: 1; transform: none; } }
+.wrapped-active .era-timeline::before { animation: era-route-draw 1.1s 420ms cubic-bezier(.16,1,.3,1) both; }
+.wrapped-active .era-stop { animation: era-stop-arrive 560ms calc(600ms + var(--era-position, 0) * 90ms) cubic-bezier(.16,1,.3,1) both; }
+
+@media (max-width: 700px) {
+  .era-timeline {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(var(--era-count), minmax(44px, 1fr));
+    height: min(48vh, 390px);
+    margin-left: 3px;
+  }
+  .era-timeline::before { left: 14px; right: auto; top: 2%; bottom: 2%; width: 1px; height: auto; transform-origin: top; background: linear-gradient(180deg, rgba(23,33,43,.16), var(--color-accent), rgba(23,33,43,.22)); }
+  .era-stop-node { left: 14px; top: 50%; width: 26px; height: 26px; border-width: 4px; }
+  .era-stop-copy,
+  .era-stop-above .era-stop-copy,
+  .era-stop-below .era-stop-copy { position: absolute; left: 38px; right: 0; top: 50%; bottom: auto; display: grid; grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr); align-items: center; gap: 2px 10px; border: 0; border-left: 2px solid; padding: 4px 0 4px 10px; transform: translateY(-50%); }
+  .era-stop-copy h3 { grid-column: 2; grid-row: 1 / span 2; margin: 0; font-size: clamp(15px, 4.7vw, 21px); }
+  .era-stop-date { grid-column: 1; font-size: 7px; }
+  .era-stop-volume { grid-column: 1; margin: 0; font-size: 7px; }
+  .era-stop-change,
+  .era-stop-latest { display: none; }
+  .wrapped-active .era-timeline::before { animation-name: era-route-draw-mobile; }
+}
+@keyframes era-route-draw-mobile { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+@media print {
+  @page { size: landscape; margin: 0; }
+  body { background: white !important; }
+  main[aria-label="The report, one screen at a time"] { height: auto !important; overflow: visible !important; scroll-snap-type: none !important; }
+  main[aria-label="The report, one screen at a time"] > section { min-height: 100vh !important; break-after: page; page-break-after: always; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .report-actions, nav[aria-label="Jump to a screen"] { display: none !important; }
+}
+
+.drop-zone::after {
+  content: "";
+  position: absolute;
+  inset: -20% -30% 35% 20%;
+  background: radial-gradient(circle, rgba(42, 171, 238, 0.24), transparent 66%);
+  transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
+  pointer-events: none;
+}
+.drop-zone:hover::after { transform: translate(-8%, 10%) scale(1.08); }
+
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.drift {
+  animation: drift 42s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .drift,
+  .report-reveal,
+  .loading-orbit {
+    animation: none;
+  }
+  .wrapped-screen.wrapped-active,
+  .wrapped-active .wrapped-content h1,
+  .wrapped-active .wrapped-content h2,
+  .wrapped-active .wrapped-content h3,
+  .wrapped-active .wrapped-content p,
+  .wrapped-active .wrapped-content dl,
+  .wrapped-active .wrapped-content ol,
+  .wrapped-active .wrapped-content ul,
+  .wrapped-active .wrapped-content li,
+  .wrapped-active .wrapped-content article,
+  .wrapped-active .wrapped-content aside,
+  .wrapped-active .wrapped-content span[style*="height"],
+  .wrapped-orbit,
+  .wrapped-sweep,
+  .wrapped-progress-fill {
+    animation: none;
+  }
+  .wrapped-active .era-timeline::before,
+  .wrapped-active .era-stop { animation: none; }
+  .loading-copy-enter {
+    animation: none;
+  }
+  .result-stat-enter,
+  .result-stat-progress {
+    animation: none;
+  }
+}
