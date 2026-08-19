@@ -25,4 +25,14 @@ describe("wild sentence retrieval", () => {
     ])));
     expect(buildWildCandidates(corpus)).toEqual([]);
   });
+
+  it("offers repeated sentence text only once", () => {
+    const line = "if this plan fails we buy exactly one hundred chickens";
+    const corpus = buildCorpus(parseExport(makeExport([
+      msg({ at: T0, from: "alice", text: line }),
+      msg({ at: T0 + 60, from: "bob", text: "that is an unreasonable number of chickens" }),
+      msg({ at: T0 + 120, from: "alice", text: line.toUpperCase() }),
+    ])));
+    expect(buildWildCandidates(corpus).filter((item) => item.text.toLowerCase() === line)).toHaveLength(1);
+  });
 });

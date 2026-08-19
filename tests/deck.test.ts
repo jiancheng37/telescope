@@ -115,7 +115,7 @@ describe("buildDeck", () => {
 });
 
 describe("displayNames", () => {
-  it("takes the first word and strips the decoration around it", () => {
+  it("keeps the full name and strips decoration around it", () => {
     expect(displayNames(["harper 🤗", "jc"])).toEqual(["Harper", "Jc"]);
   });
 
@@ -124,9 +124,9 @@ describe("displayNames", () => {
     expect(displayNames(["🌸", "jc"])).toEqual(["Them", "Jc"]);
   });
 
-  it("disambiguates two people with the same first name", () => {
-    // Otherwise every split reads "Alex / Alex" and the colours carry all the load.
-    expect(displayNames(["Alex Chen", "alex"])).toEqual(["Alex (1)", "Alex (2)"]);
+  it("disambiguates only genuinely identical full names", () => {
+    expect(displayNames(["Alex Chen", "alex"])).toEqual(["Alex Chen", "Alex"]);
+    expect(displayNames(["Alex Chen", "alex chen"])).toEqual(["Alex Chen (1)", "Alex chen (2)"]);
   });
 });
 

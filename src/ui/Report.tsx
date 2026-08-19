@@ -1702,38 +1702,74 @@ function eraChangeLine(chapter: Extract<Chapter, { kind: "era" }>): string | nul
   return `${change.metric}: ${format(change.before)} → ${format(change.after)}`;
 }
 
-function EraWrappedSlide({ card, notes, modelAssisted }: { card: DeckCard & { kind: "timeline" }; notes: WireChapterNote[]; modelAssisted: boolean }) {
+function EraWrappedSlide({ card, notes, modelAssisted, names }: { card: DeckCard & { kind: "timeline" }; notes: WireChapterNote[]; modelAssisted: boolean; names: [string, string] }) {
+  const [selected, setSelected] = useState<{ chapter: Extract<Chapter, { kind: "era" }>; index: number; position: number } | null>(null);
   const byIndex = new Map(notes.map((note) => [note.chapterIndex, note]));
-  const eras = card.chapters
+  const candidates = card.chapters
     .map((chapter, index) => ({ chapter, index: index + 1 }))
-    .filter((item) => item.chapter.kind === "era" && !item.chapter.quiet);
+    .filter((item): item is { chapter: Extract<Chapter, { kind: "era" }>; index: number } => item.chapter.kind === "era" && !item.chapter.quiet);
+  const eraMessages = candidates.reduce((sum, item) => sum + item.chapter.messageCount, 0);
+  const minimumMessages = Math.max(25, Math.round(eraMessages * 0.005));
+  const meaningful = candidates.filter(({ chapter }) => (chapter.weeks ?? chapter.months * 4) >= 2 && chapter.messageCount >= minimumMessages);
+  const retained = new Set(
+    (meaningful.length >= Math.min(3, candidates.length)
+      ? meaningful
+      : [...candidates].sort((a, b) => (b.chapter.share * Math.max(2, b.chapter.weeks ?? 1)) - (a.chapter.share * Math.max(2, a.chapter.weeks ?? 1))).slice(0, Math.min(3, candidates.length)))
+      .map((item) => item.index),
+  );
+  const eras = candidates.filter((item) => retained.has(item.index));
+
+  useEffect(() => {
+    if (!selected) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setSelected(null); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [selected]);
+
   return (
     <div>
-      <WrappedHead night={false} eyebrow="Your eras" copy={modelAssisted ? "Weekly behaviour and conversation meaning located the changes. The model supplied names only after the boundaries were fixed." : "Weekly changes in volume, replies, media, timing and language located these stretches. AI insights can add meaning and names."}>This conversation had chapters.</WrappedHead>
-      <ol
-        className="era-timeline mt-7"
-        style={{ "--era-count": Math.max(1, eras.length) } as CSSProperties}
-      >
+      <WrappedHead night={false} eyebrow="Your eras" copy={modelAssisted ? `${eras.length} significant chapters survived the cut. Scroll through them, then open one for the full story.` : "Weekly changes in volume, replies, media, timing and language located these stretches. AI insights can add meaning and names."}>This conversation had chapters.</WrappedHead>
+      <div className="era-scroll mt-7" onClick={(event) => event.stopPropagation()}>
+      <ol className="era-timeline" style={{ "--era-count": Math.max(1, eras.length) } as CSSProperties}>
         {eras.map(({ chapter, index }, position) => {
-        if (chapter.kind !== "era") return null;
         const note = byIndex.get(index);
         const change = eraChangeLine(chapter);
         const above = position % 2 === 0;
         const color = ERA_FILLS[position % ERA_FILLS.length];
         return (
           <li key={`${chapter.startTs}-${chapter.endTs}`} className={`era-stop ${above ? "era-stop-above" : "era-stop-below"}`} style={{ "--era-position": position } as CSSProperties}>
-            <span className="era-stop-node" style={{ background: color }}><span>{String(position + 1).padStart(2, "0")}</span></span>
-            <article className="era-stop-copy" style={{ borderColor: color }}>
-              <p className="era-stop-date">{monthYear(chapter.startTs)} — {monthYear(chapter.endTs)}</p>
-              <h3>{note?.name || `Era ${position + 1}`}</h3>
-              <p className="era-stop-volume">{num(chapter.messageCount)} messages · {num(chapter.messagesPerMonth)}/mo</p>
-              {change && <p className="era-stop-change">{change}</p>}
-              {position === eras.length - 1 && <span className="era-stop-latest">latest</span>}
-            </article>
+            <button type="button" className="era-stop-button" onClick={(event) => { event.stopPropagation(); setSelected({ chapter, index, position }); }} aria-label={`Open ${note?.name || `era ${position + 1}`}`}>
+              <span className="era-stop-node" style={{ background: color }}><span>{String(position + 1).padStart(2, "0")}</span></span>
+              <span className="era-stop-copy" style={{ borderColor: color }}>
+                <span className="era-stop-date">{monthYear(chapter.startTs)} — {monthYear(chapter.endTs)}</span>
+                <strong>{note?.name || `Era ${position + 1}`}</strong>
+                <span className="era-stop-volume">{num(chapter.messageCount)} messages · {num(chapter.messagesPerMonth)}/mo</span>
+                {change && <span className="era-stop-change">{change}</span>}
+                <span className="era-stop-open">open chapter ↗</span>
+              </span>
+            </button>
           </li>
         );
       })}
       </ol>
+      </div>
+      {selected && (() => {
+        const note = byIndex.get(selected.index);
+        const color = ERA_FILLS[selected.position % ERA_FILLS.length];
+        return <div className="fixed inset-0 z-[100] grid place-items-center bg-night/82 px-4 py-6 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="era-detail-title" onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget) setSelected(null); }}>
+          <section className="rise max-h-[88dvh] w-full max-w-[820px] overflow-y-auto rounded-[28px] bg-surface p-6 text-ink shadow-2xl sm:p-9" onClick={(event) => event.stopPropagation()}>
+            <header className="flex items-start justify-between gap-6 border-b border-ink/14 pb-6">
+              <div><p className="font-mono text-[10px] uppercase tracking-[.16em] text-accent">{monthYear(selected.chapter.startTs)} — {monthYear(selected.chapter.endTs)}</p><h3 id="era-detail-title" className="mt-3 font-display text-[clamp(2.4rem,6vw,5.2rem)] leading-[.9]">{note?.name || `Era ${selected.position + 1}`}</h3></div>
+              <button type="button" onClick={() => setSelected(null)} aria-label="Close era details" className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-ink/16 text-xl text-ink/45 transition hover:border-ink/40 hover:text-ink">×</button>
+            </header>
+            <p className="mt-6 max-w-[65ch] text-[clamp(1rem,1.8vw,1.25rem)] leading-relaxed text-ink/68">{note?.body || "A sustained stretch with its own rhythm and conversational shape."}</p>
+            <dl className="mt-7 grid grid-cols-2 border-y border-ink/14 sm:grid-cols-4"><div className="py-4"><dd className="font-display text-3xl">{num(selected.chapter.messageCount)}</dd><dt className="mt-1 font-mono text-[8px] uppercase tracking-[.12em] text-ink/38">messages</dt></div><div className="border-l border-ink/14 py-4 pl-5"><dd className="font-display text-3xl">{num(selected.chapter.messagesPerMonth)}</dd><dt className="mt-1 font-mono text-[8px] uppercase tracking-[.12em] text-ink/38">per month</dt></div><div className="py-4 sm:border-l sm:border-ink/14 sm:pl-5"><dd className="font-display text-3xl">{selected.chapter.weeks ?? "—"}</dd><dt className="mt-1 font-mono text-[8px] uppercase tracking-[.12em] text-ink/38">weeks</dt></div><div className="border-l border-ink/14 py-4 pl-5"><dd className="font-display text-3xl">{pct(selected.chapter.share)}</dd><dt className="mt-1 font-mono text-[8px] uppercase tracking-[.12em] text-ink/38">of the chat</dt></div></dl>
+            {selected.chapter.change?.strongest.length ? <div className="mt-7"><p className="font-mono text-[9px] uppercase tracking-[.15em] text-accent">What changed</p><ul className="mt-3 grid gap-2 sm:grid-cols-2">{selected.chapter.change.strongest.slice(0, 4).map((change) => <li key={change.metric} className="border-t border-ink/12 py-3 text-sm text-ink/64">{change.metric}: <span className="font-semibold text-ink">{num(change.before)} → {num(change.after)}</span></li>)}</ul></div> : null}
+            {note?.evidence.length ? <div className="mt-7"><p className="font-mono text-[9px] uppercase tracking-[.15em] text-accent">From this era</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{note.evidence.slice(0, 4).map((quote, quoteIndex) => <Quote key={`${quote.messageId}-${quoteIndex}`} cited={quote} names={names} />)}</div></div> : null}
+            <div className="mt-8 h-1 w-20 rounded-full" style={{ background: color }} />
+          </section>
+        </div>;
+      })()}
     </div>
   );
 }
@@ -2062,12 +2098,24 @@ export function Report({
       { id: "concentration", label: "where it happened", tone: "night", content: <ConcentrationSlide analysis={analysis} /> },
       { id: "hours", label: "when you talk", tone: "night", content: <HoursChart analysis={analysis} names={names} /> },
     ];
-    if (timeline && llm) out.push({ id: "eras", label: "your eras", tone: "light", content: <EraWrappedSlide card={timeline} notes={llm.chapterNotes} modelAssisted /> });
+    if (timeline && llm) out.push({ id: "eras", label: "your eras", tone: "light", content: <EraWrappedSlide card={timeline} notes={llm.chapterNotes} modelAssisted names={names} /> });
     out.push({ id: "dialects", label: "how you speak", tone: "night", content: <CommunicationSlide analysis={analysis} names={names} stickerVisuals={visibleStickerVisuals} /> });
     if (words) out.push({ id: "language", label: "your language", tone: "night", content: <LanguageSlide card={words} names={names} reading={vocabularyReading} selection={llm?.language} /> });
     if (llm?.motifs[0]) out.push({ id: "lore", label: "the lore", tone: "night", content: <LoreSlide motifs={llm.motifs} names={names} /> });
     if (llm?.topics.length) out.push({ id: "topics", label: "what you talk about", tone: "light", content: <TopicsWrappedSlide topics={llm.topics} /> });
-    if (llm?.wildSentences?.length) llm.wildSentences.forEach((item, index) => out.push({ id: `wild-${index + 1}`, label: "things you actually said", tone: "night", content: <WildSentenceSlide item={item} names={names} position={index + 1} total={llm.wildSentences!.length} /> }));
+    if (llm?.wildSentences?.length) {
+      const seenMessages = new Set<string>();
+      const seenSentences = new Set<string>();
+      const uniqueWild = llm.wildSentences.filter((item) => {
+        const messageKey = item.sentence.messageId === null ? `time:${item.sentence.ts}:${item.sentence.who}` : `message:${item.sentence.messageId}`;
+        const sentenceKey = item.sentence.body.toLocaleLowerCase().replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
+        if (seenMessages.has(messageKey) || seenSentences.has(sentenceKey)) return false;
+        seenMessages.add(messageKey);
+        seenSentences.add(sentenceKey);
+        return true;
+      });
+      uniqueWild.forEach((item, index) => out.push({ id: `wild-${index + 1}`, label: "things you actually said", tone: "night", content: <WildSentenceSlide item={item} names={names} position={index + 1} total={uniqueWild.length} /> }));
+    }
     if (llm?.dynamics.length) out.push({ id: "dynamics", label: "how the exchange works", tone: "night", content: <DynamicsWrappedSlide dynamics={llm.dynamics} names={names} /> });
     out.push(
       { id: "extremes", label: "the extremes", tone: "light", content: <ExtremesWrappedSlide analysis={analysis} names={names} evidence={visibleExtremeEvidence} /> },

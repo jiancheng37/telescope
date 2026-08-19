@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ParseError, analyzeParsed, parseExport, type Parsed } from "@/domain";
 import type { Analysis } from "@/domain/types";
 import { Report, type AiProgressState, type LocalExtremeEvidence, type LocalStreakMessage } from "@/ui/Report";
@@ -25,6 +26,8 @@ import { Callout, Kicker, Logo, NightPanel, Panel, Pill, Shield } from "@/ui/pri
 import type { WirePayload, WrappedStreamEvent } from "@/ui/wire";
 import { signOutCurrentUser } from "@/app/actions/auth";
 import { buildStickerVisuals, filesFromDrop, resultJsonFrom, type LocalStickerVisuals } from "@/ui/sticker-assets";
+import { invalidateDashboardData } from "@/app/app/dashboard-data";
+import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
 
 export type Viewer = {
   name: string;
@@ -145,6 +148,7 @@ function progressCopy(note: string): string {
 const CALL_OF_STAGE = [1, 1, 2, 3, 3];
 
 export default function HomeClient({ viewer, startView = "landing" }: { viewer: Viewer; startView?: "landing" | "workspace" }) {
+  const router = useRouter();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [llm, setLlm] = useState<WirePayload | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -153,6 +157,52 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
   const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
   const [prepared, setPrepared] = useState<Loaded | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  const requestLlm = useCallback(async (target: Loaded, keepCreationLoading = false) => {
+    setPhase({ kind: "working", note: "reading the conversation" });
+    try {
+      const res = await fetch("/api/wrapped", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(target.reportId ? { "x-report-id": target.reportId } : {}),
+        },
+        body: `{"export":${target.raw},"participants":${JSON.stringify(target.participants)}}`,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `The server returned ${res.status}.`);
+      }
+      if (!res.body) throw new Error("The server returned no progress stream.");
+
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      let result: WirePayload | null = null;
+      const receive = (line: string) => {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as WrappedStreamEvent;
+        if (event.type === "progress") setPhase({ kind: "working", note: event.note });
+        else if (event.type === "result") result = event.payload;
+        else throw new Error(event.message);
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) receive(line);
+      }
+      receive(buffer);
+      if (!result) throw new Error("The progress stream ended before the reading finished.");
+      setLlm(result);
+      setPhase(keepCreationLoading ? { kind: "working", note: "assembling your Wrapped" } : { kind: "done" });
+      return result;
+    } catch (err) {
+      setPhase({ kind: "error", message: err instanceof Error ? err.message : "The reading failed." });
+      throw err;
+    }
+  }, []);
 
   const load = useCallback(async (files: File[]) => {
     setPhase({ kind: "working", note: "reading the file" });
@@ -211,6 +261,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
+          invalidateDashboardData();
         } else {
           const body = (await response.json().catch(() => null)) as { error?: string } | null;
           setSaveWarning(body?.error ?? "The report is ready, but it could not be saved.");
@@ -233,7 +284,16 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       if (reportId && stickerVisuals) {
         try { localStorage.setItem(`telescope:stickers:${reportId}`, JSON.stringify(stickerVisuals)); } catch { /* Visuals remain available for this session. */ }
       }
-      setPrepared({ analysis, deck: buildDeck(analysis), raw: pendingFile.raw, reportId, participants, doubleTextMessages, extremeEvidence, stickerVisuals, autoRunAi: withAi && Boolean(viewer) });
+      const next: Loaded = { analysis, deck: buildDeck(analysis), raw: pendingFile.raw, reportId, participants, doubleTextMessages, extremeEvidence, stickerVisuals, autoRunAi: false };
+      if (withAi && viewer) {
+        try {
+          await requestLlm(next, true);
+        } catch (error) {
+          setSaveWarning(error instanceof Error ? `The local report is ready, but AI insights failed: ${error.message}` : "The local report is ready, but AI insights failed.");
+          setPhase({ kind: "working", note: "assembling your Wrapped" });
+        }
+      }
+      setPrepared(next);
     } catch (err) {
       setPhase({
         kind: "error",
@@ -245,55 +305,12 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
                 : "The report could not be created.",
       });
     }
-  }, [pendingFile, viewer]);
+  }, [pendingFile, requestLlm, viewer]);
 
   const runLlm = useCallback(async () => {
     if (!loaded) return;
-    setPhase({ kind: "working", note: "reading the conversation" });
-    try {
-      const res = await fetch("/api/wrapped", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(loaded.reportId ? { "x-report-id": loaded.reportId } : {}),
-        },
-        body: `{"export":${loaded.raw},"participants":${JSON.stringify(loaded.participants)}}`,
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `The server returned ${res.status}.`);
-      }
-      if (!res.body) throw new Error("The server returned no progress stream.");
-
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = "";
-      let result: WirePayload | null = null;
-
-      const receive = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as WrappedStreamEvent;
-        if (event.type === "progress") setPhase({ kind: "working", note: event.note });
-        else if (event.type === "result") result = event.payload;
-        else throw new Error(event.message);
-      };
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) receive(line);
-      }
-      receive(buffer);
-      if (!result) throw new Error("The progress stream ended before the reading finished.");
-
-      setLlm(result);
-      setPhase({ kind: "done" });
-    } catch (err) {
-      setPhase({ kind: "error", message: err instanceof Error ? err.message : "The reading failed." });
-    }
-  }, [loaded]);
+    await requestLlm(loaded).catch(() => undefined);
+  }, [loaded, requestLlm]);
 
   const autoAiStarted = useRef(false);
   useEffect(() => {
@@ -301,6 +318,10 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
     autoAiStarted.current = true;
     void runLlm();
   }, [loaded, llm, phase.kind, runLlm]);
+
+  useEffect(() => {
+    if (prepared?.reportId) router.prefetch(`/reports/${prepared.reportId}`);
+  }, [prepared?.reportId, router]);
 
   if (loaded) {
     const aiProgress: AiProgressState | undefined = phase.kind === "working"
@@ -350,15 +371,21 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       reportReady={Boolean(prepared)}
       onView={() => {
         if (!prepared) return;
+        if (prepared.reportId) {
+          window.dispatchEvent(new Event(TELESCOPE_OPEN_REPORT_EVENT));
+          router.push(`/reports/${prepared.reportId}`);
+          return;
+        }
         setLoaded(prepared);
         setPrepared(null);
         setPhase({ kind: "idle" });
       }}
     />
     {pendingFile && <ParticipantModal
-      initial={pendingFile.parsed.chat.participants}
+      initial={viewer ? [pendingFile.parsed.chat.participants[0], viewer.name] : pendingFile.parsed.chat.participants}
       onConfirm={confirmParticipants}
       canUseAi={Boolean(viewer)}
+      accountName={viewer?.name}
       onBack={() => setPendingFile(null)}
       onChooseAnother={() => {
         setPendingFile(null);
@@ -376,12 +403,14 @@ function ParticipantModal({
   onBack,
   onChooseAnother,
   canUseAi,
+  accountName,
 }: {
   initial: [string, string];
   onConfirm: (names: [string, string], withAi: boolean) => void;
   onBack: () => void;
   onChooseAnother: () => void;
   canUseAi: boolean;
+  accountName?: string;
 }) {
   const [first, setFirst] = useState(initial[0]);
   const [second, setSecond] = useState(initial[1]);
@@ -389,6 +418,12 @@ function ParticipantModal({
   const valid = first.trim().length > 0 && second.trim().length > 0;
 
   useEffect(() => {
+    if (canUseAi) {
+      try {
+        const preferences = JSON.parse(localStorage.getItem("telescope:preferences") ?? "{}") as { autoAi?: boolean };
+        setWithAi(Boolean(preferences.autoAi));
+      } catch { /* Keep the safe opt-in default. */ }
+    }
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") onBack();
     };
@@ -401,12 +436,12 @@ function ParticipantModal({
       <form onSubmit={(event) => { event.preventDefault(); if (valid) void onConfirm([first.trim(), second.trim()], withAi); }} className="rise w-full max-w-[520px] rounded-[24px] bg-surface p-6 text-ink shadow-2xl sm:p-9">
         <div className="mb-5 flex items-center justify-between"><Kicker>Conversation found</Kicker><button type="button" onClick={onBack} aria-label="Go back" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 text-lg text-ink/45 transition hover:border-ink/35 hover:text-ink">×</button></div>
         <h2 id="participant-title" className="font-display text-[38px] leading-tight sm:text-[46px]">Who is in this conversation?</h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink/55">Use the names you want displayed throughout the report. This does not change your export.</p>
+        <p className="mt-3 text-sm leading-relaxed text-ink/55">{accountName ? "Choose how your conversation partner appears. Your name comes from Settings." : "Use the names you want displayed throughout the report. This does not change your export."}</p>
         <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <label className="text-xs font-medium text-ink/55">First person<input autoFocus value={first} onChange={(event) => setFirst(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>
-          <label className="text-xs font-medium text-ink/55">Second person<input value={second} onChange={(event) => setSecond(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>
+          <label className="text-xs font-medium text-ink/55">Conversation partner<input autoFocus value={first} onChange={(event) => setFirst(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>
+          {accountName ? <div className="text-xs font-medium text-ink/55">You<div className="mt-2 w-full border-b border-ink/10 py-3 font-display text-2xl text-ink/48">{second}</div></div> : <label className="text-xs font-medium text-ink/55">You<input value={second} onChange={(event) => setSecond(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>}
         </div>
-        <label className={`mt-7 flex items-start gap-3 border-y border-ink/12 py-4 ${canUseAi ? "cursor-pointer" : "opacity-45"}`}><input type="checkbox" checked={withAi} disabled={!canUseAi} onChange={(event) => setWithAi(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-semibold">Generate AI insights now</span><span className="mt-1 block text-xs leading-relaxed text-ink/50">Named eras, recurring lore, wild sentences and the roles you grew into.{!canUseAi ? " Sign in to enable this." : " The report opens first while AI continues in the background."}</span></span></label>
+        <label className={`mt-7 flex items-start gap-3 border-y border-ink/12 py-4 ${canUseAi ? "cursor-pointer" : "opacity-45"}`}><input type="checkbox" checked={withAi} disabled={!canUseAi} onChange={(event) => setWithAi(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-semibold">Generate AI insights now</span><span className="mt-1 block text-xs leading-relaxed text-ink/50">Named eras, recurring lore, wild sentences and the roles you grew into.{!canUseAi ? " Sign in to enable this." : " Your Wrapped opens when the complete reading is ready."}</span></span></label>
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-ink/12 pt-5"><div className="flex items-center gap-4"><button type="button" onClick={onBack} className="text-sm text-ink/45 transition hover:text-ink">← Back</button><button type="button" onClick={onChooseAnother} className="text-sm text-accent transition hover:text-ink">Choose another file</button></div><button type="submit" disabled={!valid} className="rounded-full bg-night px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-35">Create the report</button></div>
       </form>
     </div>
@@ -442,23 +477,12 @@ function WorkspaceUpload({
   }, [guideOpen]);
 
   return (
-    <main className="min-h-dvh bg-surface text-ink lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="flex items-center justify-between border-b border-ink/12 px-5 py-5 lg:h-dvh lg:flex-col lg:items-stretch lg:border-b-0 lg:border-r lg:px-7 lg:py-7">
-        <div>
-          <Link href="/app" className="flex items-center gap-2.5"><Logo /><span className="font-display text-2xl">Telescope</span></Link>
-          <nav className="mt-12 hidden border-t border-ink/12 pt-5 font-mono text-[10px] uppercase tracking-[0.15em] lg:block">
-            <Link href="/app" className="block py-2 text-ink/42 transition hover:text-ink">Dashboard</Link>
-            <span className="block py-2 text-accent">New analysis</span>
-          </nav>
-        </div>
-        <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink/38">Model-assisted readings enabled</p>
-      </aside>
-
+    <>
       <section className="flex min-h-[calc(100dvh-73px)] flex-col px-5 py-9 sm:px-10 lg:min-h-dvh lg:px-14 lg:py-12 xl:px-20">
         <header className="border-b border-ink/14 pb-8">
           <p className="font-mono text-[10px] uppercase tracking-[0.17em] text-accent">New analysis</p>
           <h1 className="mt-3 font-display text-[46px] leading-none sm:text-[64px]">Choose a conversation.</h1>
-          <p className="mt-4 max-w-[54ch] text-sm leading-relaxed text-ink/52">Choose the complete export folder from one Telegram chat. Telescope finds <code className="font-mono text-xs text-ink">result.json</code> inside it and uses sticker assets automatically when they are present.</p>
+          <p className="mt-4 max-w-[54ch] text-sm leading-relaxed text-ink/52">Choose the complete folder Telegram created for one chat. Telescope reads the conversation and automatically includes sticker artwork when it is present.</p>
         </header>
 
         <div className="my-auto py-8">
@@ -482,7 +506,7 @@ function WorkspaceUpload({
         </div>
       </section>
       {guideOpen && <ExportGuideModal onClose={() => setGuideOpen(false)} />}
-    </main>
+    </>
   );
 }
 
@@ -492,13 +516,13 @@ function ExportGuideModal({ onClose }: { onClose: () => void }) {
     ["02", "Open the conversation", "Open the chat you want to analyze, then select ⋮ and Export chat history."],
     ["03", "Choose machine-readable JSON", "For sticker artwork, include stickers and videos in Telegram’s export options. Otherwise, media can stay unticked."],
     ["04", "Complete the export", "Telegram may impose a 24-hour wait the first time you request an export."],
-    ["05", "Choose the export folder", "Choose the complete folder Telegram created. Telescope finds result.json and includes any available sticker artwork automatically."],
+    ["05", "Choose the export folder", "Choose the complete folder Telegram created—do not select an individual file inside it. Telescope includes any available sticker artwork automatically."],
   ];
   return (
     <div onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-night/78 px-5 py-8 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="export-guide-title">
       <section className="rise w-full max-w-[760px] overflow-hidden rounded-[26px] bg-surface text-ink shadow-2xl">
         <header className="flex items-start justify-between gap-6 border-b border-ink/12 px-6 py-6 sm:px-9 sm:py-8">
-          <div><Kicker>Telegram export guide</Kicker><h2 id="export-guide-title" className="mt-3 font-display text-[clamp(2.2rem,5vw,3.8rem)] leading-[.95]">Get your result.json.</h2><p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-ink/52">One chat, one file. The process happens in Telegram Desktop and takes about a minute—unless Telegram applies its first-export wait.</p></div>
+          <div><Kicker>Telegram export guide</Kicker><h2 id="export-guide-title" className="mt-3 font-display text-[clamp(2.2rem,5vw,3.8rem)] leading-[.95]">Export the complete chat folder.</h2><p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-ink/52">One chat, one folder. Create it in Telegram Desktop, then choose that entire folder in Telescope.</p></div>
           <button type="button" onClick={onClose} aria-label="Close export guide" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink/14 text-xl text-ink/42 transition hover:border-ink/35 hover:text-ink">×</button>
         </header>
         <ol className="px-6 sm:px-9">{steps.map(([number, title, body]) => <li key={number} className="grid grid-cols-[42px_1fr] gap-3 border-b border-ink/12 py-4 last:border-b-0 sm:grid-cols-[54px_190px_1fr] sm:items-start"><span className="font-mono text-[10px] text-accent">{number}</span><p className="font-semibold text-ink">{title}</p><p className="mt-1 text-sm leading-relaxed text-ink/52 sm:mt-0">{body}</p></li>)}</ol>
@@ -901,7 +925,7 @@ function Landing({
             <div className="relative z-10 flex flex-wrap items-center gap-x-5 gap-y-2 sm:col-start-2">
               <span className="text-xs text-white/45">One 1:1 chat · any length</span>
               <span className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.14em] text-safe-lit"><Shield /> never uploaded</span>
-              <a href="#export" className="text-xs text-accent-lit underline decoration-accent-lit/35 underline-offset-4 transition hover:text-white">How do I get result.json?</a>
+              <a href="#export" className="text-xs text-accent-lit underline decoration-accent-lit/35 underline-offset-4 transition hover:text-white">How do I export the folder?</a>
             </div>
           </label>
 
@@ -990,13 +1014,12 @@ function Landing({
       <div id="export" className="scroll-mt-6 bg-shade px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
           <div>
-            <Kicker className="mb-3">Step 1 · get the file</Kicker>
+            <Kicker className="mb-3">Step 1 · get the folder</Kicker>
             <h2 className="font-display text-[31px] leading-tight text-ink sm:text-[38px]">
               Telegram hands out your history if you ask nicely.
             </h2>
             <p className="mt-4 max-w-[42ch] text-[15px] leading-relaxed text-ink/65">
-              One folder, one chat. Telescope finds <code className="font-mono text-[13.5px] text-ink">result.json</code>
-              {" "}inside it and automatically uses any sticker artwork Telegram included.
+              One folder, one chat. Choose the complete Telegram export folder and Telescope automatically reads the conversation and any sticker artwork inside it.
             </p>
           </div>
           <Panel tone="surface" className="flex flex-col gap-3.5">

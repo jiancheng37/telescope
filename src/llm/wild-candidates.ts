@@ -16,6 +16,7 @@ export interface WildCandidate {
 }
 
 const tokens = (body: string) => (body.toLocaleLowerCase().match(WORD) ?? []).map((word) => word.replaceAll("’", "'"));
+const sentenceKey = (body: string) => body.toLocaleLowerCase().replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 /** Retrieve surprising, safe-ish candidate sentences from every text message. */
 export function buildWildCandidates(corpus: Corpus): WildCandidate[] {
@@ -48,11 +49,14 @@ export function buildWildCandidates(corpus: Corpus): WildCandidate[] {
   // Keep one loud month from swallowing the dossier, and give both people room.
   const monthCounts = new Map<string, number>();
   const sideCounts = [0, 0];
+  const seenSentences = new Set<string>();
   const selected: WildCandidate[] = [];
   for (const candidate of ranked) {
     const month = new Date(candidate.ts * 1000).toISOString().slice(0, 7);
-    if ((monthCounts.get(month) ?? 0) >= 4 || sideCounts[candidate.who] >= 34) continue;
+    const key = sentenceKey(candidate.text);
+    if (seenSentences.has(key) || (monthCounts.get(month) ?? 0) >= 4 || sideCounts[candidate.who] >= 34) continue;
     selected.push(candidate);
+    seenSentences.add(key);
     monthCounts.set(month, (monthCounts.get(month) ?? 0) + 1);
     sideCounts[candidate.who]++;
     if (selected.length >= 60) break;

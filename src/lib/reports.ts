@@ -15,6 +15,8 @@ export async function saveLocalReport(userId: string, analysis: Analysis) {
       participantB: analysis.chat.participants[1],
       firstTs: Math.round(analysis.span.firstTs),
       lastTs: Math.round(analysis.span.lastTs),
+      messageCount: analysis.volume.total,
+      hasAiInsights: false,
       analysis: json(analysis),
       llm: Prisma.DbNull,
       completedAt: new Date(),
@@ -29,6 +31,8 @@ export async function saveLocalReport(userId: string, analysis: Analysis) {
       participantB: data.participantB,
       firstTs: data.firstTs,
       lastTs: data.lastTs,
+      messageCount: data.messageCount,
+      hasAiInsights: false,
       analysis: data.analysis,
       llm: Prisma.DbNull,
       completedAt: data.completedAt,
@@ -51,7 +55,7 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
     if (savedReportId) {
       const claimed = await tx.report.updateMany({
         where: { id: savedReportId, userId, status: ReportStatus.COMPLETE, llm: { equals: Prisma.DbNull } },
-        data: { status: ReportStatus.PROCESSING, completedAt: new Date() },
+        data: { status: ReportStatus.PROCESSING, hasAiInsights: false, completedAt: new Date() },
       });
       return claimed.count === 1 ? savedReportId : null;
     }
@@ -69,6 +73,8 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
           participantB: analysis.chat.participants[1],
           firstTs: Math.round(analysis.span.firstTs),
           lastTs: Math.round(analysis.span.lastTs),
+          messageCount: analysis.volume.total,
+          hasAiInsights: false,
           llm: Prisma.DbNull,
           completedAt: new Date(),
         },
@@ -84,6 +90,8 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
         participantB: analysis.chat.participants[1],
         firstTs: Math.round(analysis.span.firstTs),
         lastTs: Math.round(analysis.span.lastTs),
+        messageCount: analysis.volume.total,
+        hasAiInsights: false,
       },
       select: { id: true },
     });
@@ -101,6 +109,8 @@ export async function completeReport(id: string, userId: string, analysis: Analy
       status: ReportStatus.COMPLETE,
       analysis: json(analysis),
       llm: json(llm),
+      messageCount: analysis.volume.total,
+      hasAiInsights: true,
       completedAt: new Date(),
     },
   });

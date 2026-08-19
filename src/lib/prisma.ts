@@ -4,7 +4,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 // Bump the development cache key when a regenerated client changes shape. A
 // Next.js dev process survives module reloads, so the previous `prisma` global
 // could otherwise keep serving the pre-sharing client until a manual restart.
-const globalForPrisma = globalThis as unknown as { prismaWithSharing?: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prismaWithReportNames?: PrismaClient };
 
 function makeClient() {
   const url = process.env.DATABASE_URL;
@@ -12,5 +12,5 @@ function makeClient() {
   return new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 }
 
-export const prisma = globalForPrisma.prismaWithSharing ?? makeClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prismaWithSharing = prisma;
+export const prisma = globalForPrisma.prismaWithReportNames ?? makeClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prismaWithReportNames = prisma;

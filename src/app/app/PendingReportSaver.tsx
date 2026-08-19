@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { invalidateDashboardData } from "./dashboard-data";
 
 const STORAGE_KEY = "telescope:pending-analysis";
 
 export function PendingReportSaver() {
-  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const started = useRef(false);
 
@@ -27,12 +26,12 @@ export function PendingReportSaver() {
         return;
       }
       sessionStorage.removeItem(STORAGE_KEY);
+      invalidateDashboardData();
       setMessage("Report saved to your dashboard.");
-      router.refresh();
     }).catch(() => {
       setMessage("Your report could not be saved.");
     });
-  }, [router]);
+  }, []);
 
   if (!message) return null;
   return <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-night px-5 py-3 text-sm text-white shadow-xl">{message}</div>;

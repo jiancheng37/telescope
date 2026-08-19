@@ -249,14 +249,54 @@ body {
 }
 .wrapped-progress-fill { animation: wrapped-progress-flare 720ms ease-out both; }
 
-/* The era screen is a route, not a ranked list. Every detected era remains in
- * chronological order, with alternating copy keeping six stops legible in one
- * viewport. On narrow screens the same route turns vertically. */
+.conversation-row { transition: border-color 180ms ease, background-color 180ms ease; }
+.conversation-row:hover { border-color: rgba(42,171,238,.5); background: linear-gradient(90deg, rgba(42,171,238,.035), transparent 62%); }
+.conversation-status { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .11em; text-transform: uppercase; }
+.conversation-status i { display: block; width: 6px; height: 6px; border-radius: 999px; }
+.collection-tab { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 12px; color: rgba(23,33,43,.48); font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; transition: color 160ms ease, background-color 160ms ease; }
+.collection-tab:hover { color: var(--color-ink); background: rgba(23,33,43,.045); }
+.collection-tab span { color: rgba(23,33,43,.28); }
+.collection-tab-active { background: var(--color-night); color: white; }
+.collection-tab-active:hover { background: var(--color-night); color: white; }
+.collection-tab-active span { color: rgba(255,255,255,.45); }
+
+.settings-layout { display: grid; gap: 48px; }
+.settings-index { display: none; }
+.settings-kicker { font-family: var(--font-mono); font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--color-accent); }
+.settings-title { margin-top: 10px; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.35rem); line-height: .95; }
+.settings-switch { position: relative; width: 48px; height: 28px; flex: 0 0 48px; border: 1px solid rgba(23,33,43,.12); border-radius: 999px; background: rgba(23,33,43,.1); box-shadow: inset 0 1px 2px rgba(23,33,43,.08); transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
+.settings-switch span { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 999px; background: white; box-shadow: 0 2px 6px rgba(23,33,43,.2); transform: translateX(0); transition: transform 220ms cubic-bezier(.16,1,.3,1); }
+.settings-switch[aria-checked="true"] { border-color: var(--color-accent); background: var(--color-accent); box-shadow: inset 0 1px 2px rgba(0,0,0,.08), 0 0 0 3px rgba(42,171,238,.08); }
+.settings-switch[aria-checked="true"] span { transform: translateX(20px); }
+.settings-switch:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.settings-switch:active span { width: 23px; }
+.settings-switch[aria-checked="true"]:active span { transform: translateX(17px); }
+@media (min-width: 900px) {
+  .settings-layout { grid-template-columns: 180px minmax(0, 760px); align-items: start; }
+  .settings-index { position: sticky; top: 56px; display: flex; flex-direction: column; border-top: 1px solid rgba(23,33,43,.12); padding-top: 14px; }
+  .settings-index a { padding: 7px 0; font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: rgba(23,33,43,.42); transition: color 160ms ease; }
+  .settings-index a:hover { color: var(--color-accent); }
+}
+.telescope-large-text { font-size: 112.5%; }
+.telescope-reduce-motion *, .telescope-reduce-motion *::before, .telescope-reduce-motion *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+
+/* Significant eras stay chronological, but never compress to fit the screen.
+ * The rail scrolls horizontally and each stop opens its full chapter. */
+.era-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-color: rgba(42,171,238,.5) rgba(23,33,43,.08);
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  padding-bottom: 10px;
+}
 .era-timeline {
   --era-count: 1;
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--era-count), minmax(0, 1fr));
+  display: flex;
+  width: max-content;
+  min-width: 100%;
   height: clamp(250px, 38vh, 350px);
   list-style: none;
 }
@@ -270,7 +310,8 @@ body {
   transform-origin: left;
   background: linear-gradient(90deg, rgba(23,33,43,.16), var(--color-accent), rgba(23,33,43,.22));
 }
-.era-stop { position: relative; min-width: 0; }
+.era-stop { position: relative; flex: 0 0 clamp(220px, 24vw, 290px); min-width: 0; scroll-snap-align: start; }
+.era-stop-button { position: absolute; inset: 0; width: 100%; cursor: pointer; text-align: left; }
 .era-stop-node {
   position: absolute;
   z-index: 2;
@@ -289,6 +330,7 @@ body {
 .era-stop-node > span { font-family: var(--font-mono); font-size: 7px; color: white; letter-spacing: .06em; }
 .era-stop-copy {
   position: absolute;
+  display: block;
   left: 8px;
   right: 8px;
   min-width: 0;
@@ -304,10 +346,10 @@ body {
 .era-stop-change,
 .era-stop-latest { font-family: var(--font-mono); text-transform: uppercase; }
 .era-stop-date { font-size: 8px; letter-spacing: .1em; color: rgba(23,33,43,.42); }
-.era-stop-copy h3 { margin-top: 6px; overflow: hidden; color: var(--color-ink); font-family: var(--font-display); font-size: clamp(18px, 1.8vw, 27px); line-height: .96; text-overflow: ellipsis; white-space: nowrap; }
+.era-stop-copy strong { display: block; margin-top: 6px; overflow: hidden; color: var(--color-ink); font-family: var(--font-display); font-size: clamp(18px, 1.8vw, 27px); font-weight: 400; line-height: .96; text-overflow: ellipsis; white-space: nowrap; }
 .era-stop-volume { margin-top: 7px; font-size: 8px; letter-spacing: .04em; color: rgba(23,33,43,.48); }
 .era-stop-change { margin-top: 6px; overflow: hidden; font-size: 8px; color: rgba(23,33,43,.7); text-overflow: ellipsis; white-space: nowrap; }
-.era-stop-latest { display: inline-block; margin-top: 7px; border: 1px solid rgba(23,33,43,.2); border-radius: 999px; padding: 3px 6px; font-size: 7px; letter-spacing: .12em; color: rgba(23,33,43,.58); }
+.era-stop-open { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--color-accent); }
 
 @keyframes era-route-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes era-stop-arrive { from { opacity: 0; transform: translateY(16px) scale(.94); } to { opacity: 1; transform: none; } }
@@ -315,26 +357,9 @@ body {
 .wrapped-active .era-stop { animation: era-stop-arrive 560ms calc(600ms + var(--era-position, 0) * 90ms) cubic-bezier(.16,1,.3,1) both; }
 
 @media (max-width: 700px) {
-  .era-timeline {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(var(--era-count), minmax(44px, 1fr));
-    height: min(48vh, 390px);
-    margin-left: 3px;
-  }
-  .era-timeline::before { left: 14px; right: auto; top: 2%; bottom: 2%; width: 1px; height: auto; transform-origin: top; background: linear-gradient(180deg, rgba(23,33,43,.16), var(--color-accent), rgba(23,33,43,.22)); }
-  .era-stop-node { left: 14px; top: 50%; width: 26px; height: 26px; border-width: 4px; }
-  .era-stop-copy,
-  .era-stop-above .era-stop-copy,
-  .era-stop-below .era-stop-copy { position: absolute; left: 38px; right: 0; top: 50%; bottom: auto; display: grid; grid-template-columns: minmax(88px, .8fr) minmax(0, 1.3fr); align-items: center; gap: 2px 10px; border: 0; border-left: 2px solid; padding: 4px 0 4px 10px; transform: translateY(-50%); }
-  .era-stop-copy h3 { grid-column: 2; grid-row: 1 / span 2; margin: 0; font-size: clamp(15px, 4.7vw, 21px); }
-  .era-stop-date { grid-column: 1; font-size: 7px; }
-  .era-stop-volume { grid-column: 1; margin: 0; font-size: 7px; }
-  .era-stop-change,
-  .era-stop-latest { display: none; }
-  .wrapped-active .era-timeline::before { animation-name: era-route-draw-mobile; }
+  .era-stop { flex-basis: min(76vw, 260px); }
+  .era-timeline { height: min(38vh, 310px); }
 }
-@keyframes era-route-draw-mobile { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 
 @media print {
   @page { size: landscape; margin: 0; }

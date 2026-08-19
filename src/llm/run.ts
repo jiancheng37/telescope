@@ -39,17 +39,16 @@ import { citableIds, validateReading, type ValidationReport } from "./validate";
 
 /**
  * Overridable because this is the one line most likely to be wrong for a given
- * account: model availability varies by org, and the 5.6 variants are siblings
- * whose tiering isn't something this file can check. `--model` or
- * `TELESCOPE_MODEL` beats editing it.
+ * account: model availability varies by org. `--model` or `TELESCOPE_MODEL`
+ * still beats editing the default.
  */
-export const MODEL = process.env.TELESCOPE_MODEL ?? "gpt-5-mini";
+export const MODEL = process.env.TELESCOPE_MODEL ?? "gpt-5.6-luna";
 
 /**
  * The corpus is already paired with a deterministic brief and a strict output
  * schema. Low effort leaves the output budget for the structured report instead
- * of spending most of it on hidden reasoning, which is especially important on
- * the mini model with a 100k-token input.
+ * of spending most of it on hidden reasoning. Luna supports low effort and its
+ * larger context window leaves comfortable room around the sampled corpus.
  */
 export const EFFORT = "low" as const;
 

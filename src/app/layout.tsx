@@ -31,7 +31,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Telescope:",
+  title: "Telescope",
   description: "What a year of one conversation actually looked like.",
 };
 

@@ -33,19 +33,18 @@ export function monthYear(ts: number): string {
 }
 
 /**
- * A short, human display name. The export carries emoji and surnames that make a
- * mess of a headline, but unlike the payload labels these are shown to the person
- * who was in the conversation, so they keep their capitals.
+ * A human display name. Remove decorative export characters, but retain the full
+ * chosen name: surnames and multi-word names are identity, not headline noise.
  */
 export function displayNames(participants: [string, string]): [string, string] {
   const clean = (raw: string, fallback: string) => {
-    const first = raw.replace(/[^\p{L}\p{N}\s'-]/gu, " ").trim().split(/\s+/)[0] ?? "";
-    if (first.length < 2) return fallback;
-    return first[0].toUpperCase() + first.slice(1);
+    const full = raw.replace(/[^\p{L}\p{N}\s'-]/gu, " ").trim().replace(/\s+/g, " ");
+    if (full.length < 2) return fallback;
+    return full[0].toUpperCase() + full.slice(1);
   };
   const a = clean(participants[0], "Them");
   const b = clean(participants[1], "You");
-  return a === b ? [`${a} (1)`, `${b} (2)`] : [a, b];
+  return a.toLocaleLowerCase() === b.toLocaleLowerCase() ? [`${a} (1)`, `${b} (2)`] : [a, b];
 }
 
 // ----------------------------------------------------------------- card model

@@ -1,0 +1,3 @@
+export default function DashboardLoading() {
+  return <section className="px-5 py-10 sm:px-10 lg:px-14 lg:py-14 xl:px-20" aria-label="Loading workspace"><div className="h-3 w-24 animate-pulse rounded-full bg-accent/25" /><div className="mt-5 h-14 w-72 max-w-full animate-pulse rounded-xl bg-ink/[.06]" /><div className="mt-10 border-y border-ink/12 py-5"><div className="h-9 animate-pulse rounded-lg bg-ink/[.045]" /></div><div className="mt-8 space-y-5">{[0,1,2].map((item) => <div key={item} className="h-20 animate-pulse border-b border-ink/10 bg-gradient-to-r from-ink/[.035] to-transparent" />)}</div></section>;
+}

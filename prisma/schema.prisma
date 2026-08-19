@@ -42,9 +42,11 @@ model User {
   email         String?   @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
+  reportName    String?   @map("report_name")
   accounts      Account[]
   sessions      Session[]
   reports       Report[]
+  collections   Collection[]
 
   @@map("users")
 }
@@ -74,13 +76,41 @@ model Report {
   participantB String       @map("participant_b")
   firstTs      Int          @map("first_ts")
   lastTs       Int          @map("last_ts")
+  messageCount Int          @default(0) @map("message_count")
+  hasAiInsights Boolean     @default(false) @map("has_ai_insights")
   analysis     Json?
   llm          Json?
   shareToken   String?      @unique @map("share_token")
   createdAt    DateTime     @default(now()) @map("created_at")
   completedAt  DateTime?    @map("completed_at")
+  collections  CollectionReport[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@unique([userId, chatId])
   @@map("reports")
+}
+
+model Collection {
+  id        String             @id @default(cuid())
+  userId    String             @map("user_id")
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  reports   CollectionReport[]
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  @@unique([userId, name])
+  @@index([userId, createdAt])
+  @@map("collections")
+}
+
+model CollectionReport {
+  collectionId String     @map("collection_id")
+  reportId     String     @map("report_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  report       Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  addedAt      DateTime   @default(now()) @map("added_at")
+
+  @@id([collectionId, reportId])
+  @@index([reportId])
+  @@map("collection_reports")
 }

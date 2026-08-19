@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Kicker, NightPanel } from "./primitives";
 import type { WrappedStreamEvent } from "./wire";
@@ -31,15 +32,17 @@ export function SavedReportReadingControl({
   reportId,
   participants,
   processing = false,
+  startOpen = false,
 }: {
   reportId: string;
   participants: [string, string];
   processing?: boolean;
+  startOpen?: boolean;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State>({ kind: "idle" });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen && !processing);
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
@@ -140,9 +143,9 @@ export function SavedReportReadingControl({
         {state.kind === "error" && <p className="mt-3 text-sm leading-relaxed text-side-a">{state.message}</p>}
       </NightPanel>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal((
         <div
-          className="fixed inset-0 z-[80] grid place-items-center bg-night/82 px-5 py-8 backdrop-blur-md"
+          className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-night/82 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-8"
           role="dialog"
           aria-modal="true"
           aria-labelledby="insights-upload-title"
@@ -151,32 +154,36 @@ export function SavedReportReadingControl({
             if (event.target === event.currentTarget && state.kind !== "working") setOpen(false);
           }}
         >
-          <div className="starfield rise relative w-full max-w-[680px] overflow-hidden rounded-[26px] border border-white/16 bg-night p-6 text-white shadow-2xl sm:p-9" onClick={(event) => event.stopPropagation()}>
-            <header className="relative flex items-center justify-between border-b border-white/12 pb-5">
-              <div><Kicker tone="lit">AI insights</Kicker><h2 id="insights-upload-title" className="mt-2 font-display text-[clamp(2rem,5vw,3.6rem)] leading-none">Bring the conversation back.</h2></div>
-              <button type="button" disabled={state.kind === "working"} onClick={() => setOpen(false)} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-full border border-white/16 text-xl text-white/45 transition hover:border-white/40 hover:text-white disabled:opacity-30">×</button>
+          <div className="starfield rise relative my-auto w-full max-w-[820px] overflow-hidden rounded-[22px] border border-white/16 bg-night p-5 text-white shadow-2xl sm:rounded-[30px] sm:p-8 lg:p-10" onClick={(event) => event.stopPropagation()}>
+            <button type="button" disabled={state.kind === "working"} onClick={() => setOpen(false)} aria-label="Close AI insights" className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-white/16 bg-night/75 text-xl text-white/55 backdrop-blur transition hover:border-white/40 hover:text-white disabled:opacity-30 sm:right-6 sm:top-6">×</button>
+            <header className="relative border-b border-white/12 pb-5 pr-12 sm:pb-7 sm:pr-16">
+              <Kicker tone="lit">AI insights</Kicker><h2 id="insights-upload-title" className="mt-3 max-w-[14ch] font-display text-[clamp(2.65rem,7vw,4.7rem)] leading-[.9] tracking-[-.025em]">Bring the conversation back.</h2>
             </header>
-            <p className="relative mt-5 max-w-[58ch] text-sm leading-relaxed text-white/55">The raw chat was never saved. Choose the same Telegram export folder so AI can surface eras, lore, topics and the roles you each take. Sticker assets are detected automatically.</p>
-            <input ref={input} type="file" {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" onChange={(event) => { const files = [...(event.target.files ?? [])]; if (files.length) void choose(files); }} />
-            <button
-              type="button"
-              disabled={state.kind === "working"}
-              onClick={() => input.current?.click()}
-              onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => { event.preventDefault(); setDragging(false); void filesFromDrop(event.dataTransfer).then((files) => { if (files.length) void choose(files); }); }}
-              className={`relative mt-7 flex min-h-[190px] w-full flex-col items-center justify-center rounded-[20px] border border-dashed px-6 text-center transition ${dragging ? "border-accent-lit bg-accent-lit/12" : "border-white/22 bg-white/[.035] hover:border-accent-lit/70 hover:bg-white/[.06]"}`}
-            >
-              <span className="grid h-12 w-12 place-items-center rounded-full border border-accent-lit/55 text-xl text-accent-lit">↗</span>
-              <span className="mt-4 font-display text-2xl">{state.kind === "working" ? "Reading the conversation…" : "Choose the export folder"}</span>
-              <span className="mt-2 text-xs text-white/38">Sticker files stay in this browser and are used only when present</span>
-            </button>
-            {state.kind === "working" && <p className="relative mt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-accent-lit">{state.note}</p>}
-            {state.kind === "error" && <p className="relative mt-4 text-sm leading-relaxed text-side-a">{state.message}</p>}
-            <p className="relative mt-5 border-t border-white/12 pt-4 text-xs leading-relaxed text-white/36">This AI step sends the conversation to the server for analysis. The raw file is not added to your saved report.</p>
+            <div className="relative pt-6 sm:pt-7">
+              <p className="max-w-[60ch] text-sm leading-relaxed text-white/58 sm:text-[15px]">The raw chat was never saved. Choose the same Telegram export folder so AI can surface eras, lore, topics and the roles you each take. Sticker assets are detected automatically.</p>
+              <div className="mt-6">
+                <input ref={input} type="file" {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} className="sr-only" onChange={(event) => { const files = [...(event.target.files ?? [])]; if (files.length) void choose(files); }} />
+                <button
+                  type="button"
+                  disabled={state.kind === "working"}
+                  onClick={() => input.current?.click()}
+                  onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => { event.preventDefault(); setDragging(false); void filesFromDrop(event.dataTransfer).then((files) => { if (files.length) void choose(files); }); }}
+                  className={`relative flex min-h-[170px] w-full flex-col items-center justify-center rounded-[18px] border border-dashed px-5 py-7 text-center transition sm:min-h-[210px] sm:px-8 ${dragging ? "border-accent-lit bg-accent-lit/12" : "border-white/22 bg-white/[.035] hover:border-accent-lit/70 hover:bg-white/[.06]"}`}
+                >
+                  <span className="grid h-12 w-12 place-items-center rounded-full border border-accent-lit/55 text-xl text-accent-lit sm:h-14 sm:w-14">↗</span>
+                  <span className="mt-4 font-display text-[clamp(1.65rem,5vw,2.35rem)] leading-none">{state.kind === "working" ? "Reading the conversation…" : "Choose the export folder"}</span>
+                  <span className="mt-3 max-w-[34ch] text-xs leading-relaxed text-white/38">Sticker files stay in this browser and are used only when present</span>
+                </button>
+                {state.kind === "working" && <p className="relative mt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-accent-lit">{state.note}</p>}
+                {state.kind === "error" && <p className="relative mt-4 text-sm leading-relaxed text-side-a">{state.message}</p>}
+              </div>
+              <p className="mt-6 border-t border-white/12 pt-4 text-xs leading-relaxed text-white/36">This AI step sends the conversation to the server for analysis. The raw file is not added to your saved report.</p>
+            </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </>
   );
 }

@@ -194,6 +194,13 @@ describe("validateReading", () => {
     expect(rejected.wildSentences).toHaveLength(0);
   });
 
+  it("keeps a wild sentence only once when the model repeats it", () => {
+    const repeated = { candidateId: "wild-1", category: "suspiciously-specific" as const, explanation: "A strangely formal refusal.", evidence: [{ seq: 1, quote: "i'm not saying it again" }] };
+    const r = validateReading(corpus(), reading({ wildSentences: [repeated, repeated] }));
+    expect(r.wildSentences).toHaveLength(1);
+    expect(r.dropped).toContainEqual(expect.objectContaining({ what: "duplicate wild sentence", id: "wild-1" }));
+  });
+
   it("never drops naming, even when its evidence fails", () => {
     // "She never uses his name" is a real finding that is *supposed* to have
     // nothing to cite on one side.

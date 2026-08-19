@@ -1,16 +1,11 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+"use client";
+
 import HomeClient, { type Viewer } from "@/app/HomeClient";
+import { useAppIdentity } from "../AppShell";
 
-export default async function NewAnalysisPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/sign-in");
-
-  const viewer: NonNullable<Viewer> = {
-    name: session.user.name ?? session.user.email ?? "You",
-    image: session.user.image ?? null,
-    reports: [],
-  };
+export default function NewAnalysisPage() {
+  const { name } = useAppIdentity();
+  const viewer: NonNullable<Viewer> = { name, image: null, reports: [] };
 
   return <HomeClient viewer={viewer} startView="workspace" />;
 }

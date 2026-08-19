@@ -6,6 +6,14 @@ export function ReportActions({ reportId, publicPath }: { reportId?: string; pub
   const [state, setState] = useState<"idle" | "working" | "copied" | "error">("idle");
 
   const share = async () => {
+    if (!publicPath) {
+      try {
+        const preferences = JSON.parse(localStorage.getItem("telescope:preferences") ?? "{}") as { confirmSharing?: boolean };
+        if (preferences.confirmSharing !== false && !window.confirm("Create a public link to this report? Anyone with the link can view it.")) return;
+      } catch {
+        if (!window.confirm("Create a public link to this report? Anyone with the link can view it.")) return;
+      }
+    }
     setState("working");
     try {
       let path = publicPath;

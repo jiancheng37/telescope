@@ -167,11 +167,22 @@ export function validateReading(corpus: Corpus, reading: ReadingOutput): Validat
     shared: keepLanguage("shared", reading.language.shared),
   };
   const wildMap = new Map(buildWildCandidates(corpus).map((candidate) => [candidate.id, candidate]));
+  const seenWildSequences = new Set<number>();
+  const seenWildSentences = new Set<string>();
   const eligibleWild = reading.wildSentences.filter((item) => {
     const candidate = wildMap.get(item.candidateId);
     const valid = candidate && item.evidence[0]?.seq === candidate.seq && normalize(candidate.text) === normalize(item.evidence[0]?.quote ?? "");
     if (!valid) dropped.push({ what: "wild sentence", id: item.candidateId, failures: [] });
-    return Boolean(valid);
+    if (!valid) return false;
+    const sentence = normalize(candidate.text);
+    const duplicate = seenWildSequences.has(candidate.seq) || seenWildSentences.has(sentence);
+    if (duplicate) {
+      dropped.push({ what: "duplicate wild sentence", id: item.candidateId, failures: [] });
+      return false;
+    }
+    seenWildSequences.add(candidate.seq);
+    seenWildSentences.add(sentence);
+    return true;
   });
   const wildSentences = keep("wild sentence", (item: WildSentence) => item.candidateId, eligibleWild, (item) => item.evidence);
 
