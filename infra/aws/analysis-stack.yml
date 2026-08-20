@@ -294,7 +294,8 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: [s3:PutObject, s3:HeadObject]
+                # S3 authorizes the HeadObject API with the s3:GetObject action.
+                Action: [s3:PutObject, s3:GetObject]
                 Resource: !Sub "${UploadBucket.Arn}/analysis-uploads/*"
               - Effect: Allow
                 Action: sqs:SendMessage
