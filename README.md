@@ -30,9 +30,10 @@ the cited fragment marked inside it, never clipped to the fragment.
 
 - Parsing and every deterministic metric happen in the browser. The export file is
   not uploaded to run them.
-- The written half is the exception, and the UI says so before you opt in: it posts
-  the export to `/api/wrapped`, which re-parses it server-side and sends a sampled
-  corpus to the OpenAI API.
+- The written half is the exception, and the UI says so before you opt in: the
+  browser uploads the export directly to encrypted private S3. An SQS-driven ECS
+  worker re-parses it, sends a sampled corpus to OpenAI, saves the completed
+  reading, and deletes the raw export. S3 expires abandoned uploads after one day.
 - Saving a report stores the computed analysis and the model's readings — including
   the messages it quotes — in your own Postgres.
 
@@ -43,14 +44,42 @@ Chat exports and anything derived from one are gitignored (`result.json`,
 
 ```sh
 npm install
-cp .env.example .env.local     # then fill it in
+npm run db:local:up
 npm run db:migrate
-npm run dev
+npm run dev          # terminal 1: Next.js
+npm run worker:dev   # terminal 2: local analysis worker
 ```
 
-`.env.local` needs `DATABASE_URL`, `AUTH_SECRET` (`npx auth secret`), Google OAuth
-credentials for sign-in, and `OPENAI_API_KEY` for the written half. The
-deterministic report works without the key.
+Local development reads `.env.development.local`. Docker Compose starts both
+PostgreSQL and LocalStack; LocalStack provides local S3 and SQS equivalents for
+the upload-and-worker flow. During the transition the app can
+inherit non-database credentials from the existing `.env.local`; move those to
+`.env.development.local` and then remove `.env.local` to make the boundary strict.
+Use `.env.development.example` as the local template. Add an `OPENAI_API_KEY` to
+run model analysis; the rest of the app works without one.
+
+Production secrets belong in Vercel's Production environment, using
+`.env.production.example` as the checklist. Never create or commit a populated
+production env file. `OPENAI_API_KEY` belongs only to the ECS worker.
+Production analysis endpoints also require Upstash Redis for shared rate
+limiting; local development uses an in-memory limiter automatically.
+
+Database commands are environment-specific:
+
+```sh
+npm run db:local:up          # start local PostgreSQL + LocalStack
+npm run db:migrate           # alias for db:migrate:local
+npm run worker:dev           # consume jobs from local SQS in another terminal
+npm run db:local:down        # stop services; PostgreSQL data is preserved
+
+# Deliberately guarded; normally run this in deployment CI.
+CONFIRM_PRODUCTION_MIGRATION=1 npm run db:migrate:production
+```
+
+The deterministic report works without the local AWS services or worker.
+
+The production analysis architecture and AWS deployment sequence are documented
+in [`docs/aws-analysis.md`](docs/aws-analysis.md).
 
 To get an export: Telegram Desktop → the chat → ⋮ → Export chat history → JSON.
 

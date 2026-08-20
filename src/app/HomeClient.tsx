@@ -23,11 +23,12 @@ import { Report, type AiProgressState, type LocalExtremeEvidence, type LocalStre
 import { ReportActions } from "@/ui/ReportActions";
 import { type DeckCard, buildDeck } from "@/ui/cards";
 import { Callout, Kicker, Logo, NightPanel, Panel, Pill, Shield } from "@/ui/primitives";
-import type { WirePayload, WrappedStreamEvent } from "@/ui/wire";
+import type { WirePayload } from "@/ui/wire";
 import { signOutCurrentUser } from "@/app/actions/auth";
 import { buildStickerVisuals, filesFromDrop, resultJsonFrom, type LocalStickerVisuals } from "@/ui/sticker-assets";
 import { invalidateDashboardData } from "@/app/app/dashboard-data";
 import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
+import { requestAnalysis } from "@/lib/analysis-client";
 
 export type Viewer = {
   name: string;
@@ -161,40 +162,13 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
   const requestLlm = useCallback(async (target: Loaded, keepCreationLoading = false) => {
     setPhase({ kind: "working", note: "reading the conversation" });
     try {
-      const res = await fetch("/api/wrapped", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(target.reportId ? { "x-report-id": target.reportId } : {}),
-        },
-        body: `{"export":${target.raw},"participants":${JSON.stringify(target.participants)}}`,
+      if (!target.reportId) throw new Error("Save the report before requesting AI insights.");
+      const result = await requestAnalysis({
+        raw: target.raw,
+        reportId: target.reportId,
+        participants: target.participants,
+        onProgress: (note) => setPhase({ kind: "working", note }),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `The server returned ${res.status}.`);
-      }
-      if (!res.body) throw new Error("The server returned no progress stream.");
-
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = "";
-      let result: WirePayload | null = null;
-      const receive = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as WrappedStreamEvent;
-        if (event.type === "progress") setPhase({ kind: "working", note: event.note });
-        else if (event.type === "result") result = event.payload;
-        else throw new Error(event.message);
-      };
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) receive(line);
-      }
-      receive(buffer);
-      if (!result) throw new Error("The progress stream ended before the reading finished.");
       setLlm(result);
       setPhase(keepCreationLoading ? { kind: "working", note: "assembling your report" } : { kind: "done" });
       return result;

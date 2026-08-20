@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: telescope-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: telescope
+      POSTGRES_PASSWORD: telescope-dev
+      POSTGRES_DB: telescope
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telescope -d telescope"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - telescope_postgres_dev:/var/lib/postgresql/data
+
+  localstack:
+    # Releases from 2026-03 onward require a LocalStack account/auth token.
+    # Pin the final Community line so local development remains self-contained.
+    image: localstack/localstack:4.14.0
+    container_name: telescope-localstack-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      SERVICES: s3,sqs
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:4566/_localstack/health >/dev/null"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ./infra/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+
+volumes:
+  telescope_postgres_dev:

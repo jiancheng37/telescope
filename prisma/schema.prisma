@@ -47,6 +47,7 @@ model User {
   sessions      Session[]
   reports       Report[]
   collections   Collection[]
+  analysisJobs  AnalysisJob[]
 
   @@map("users")
 }
@@ -87,10 +88,45 @@ model Report {
   createdAt    DateTime     @default(now()) @map("created_at")
   completedAt  DateTime?    @map("completed_at")
   collections  CollectionReport[]
+  analysisJobs AnalysisJob[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@unique([userId, chatId])
   @@map("reports")
+}
+
+enum AnalysisJobStatus {
+  AWAITING_UPLOAD
+  QUEUED
+  PROCESSING
+  COMPLETE
+  FAILED
+  CANCELLED
+}
+
+model AnalysisJob {
+  id           String            @id @default(cuid())
+  userId       String            @map("user_id")
+  reportId     String            @map("report_id")
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report       Report            @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  status       AnalysisJobStatus @default(AWAITING_UPLOAD)
+  storageKey   String            @unique @map("storage_key")
+  uploadBytes  Int               @map("upload_bytes")
+  participantA String            @map("participant_a")
+  participantB String            @map("participant_b")
+  stage        String?
+  error        String?
+  attempts     Int               @default(0)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  startedAt    DateTime?         @map("started_at")
+  completedAt  DateTime?         @map("completed_at")
+  expiresAt    DateTime          @map("expires_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@index([reportId, status])
+  @@map("analysis_jobs")
 }
 
 model Collection {

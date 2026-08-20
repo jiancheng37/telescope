@@ -120,16 +120,6 @@ export interface WirePayload {
   model: string;
 }
 
-/**
- * Lines streamed by `/api/wrapped`. Keeping the protocol beside `WirePayload`
- * gives the route and browser one shared contract without importing server code
- * into the client bundle.
- */
-export type WrappedStreamEvent =
-  | { type: "progress"; note: string }
-  | { type: "result"; payload: WirePayload }
-  | { type: "error"; message: string };
-
 const cite = (e: ResolvedEvidence): Cited => ({
   quote: e.quote,
   body: e.body,

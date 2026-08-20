@@ -1,0 +1,19 @@
+FROM node:24-slim AS worker
+
+WORKDIR /app
+ENV NODE_ENV=production
+# Prisma Client generation validates that a URL exists but never connects during
+# the image build. ECS supplies the real secret at runtime.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+
+COPY package.json package-lock.json ./
+COPY prisma.config.ts tsconfig.json ./
+COPY prisma ./prisma
+RUN npm ci --include=dev
+
+COPY src ./src
+COPY scripts/analysis-worker*.ts ./scripts/
+RUN npm run db:generate
+
+USER node
+CMD ["npm", "run", "worker"]

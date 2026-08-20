@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Telescope asynchronous analysis worker (S3, SQS, ECR, and ECS Fargate)
+
+Parameters:
+  WebOrigin:
+    Type: String
+    Description: Production Telescope origin, for example https://telescope.example.com
+  WorkerImageTag:
+    Type: String
+    Default: initial
+    Description: Immutable worker image tag already pushed to the stack's ECR repository
+  DatabaseUrlSecretArn:
+    Type: String
+    Description: Secrets Manager ARN whose value is the pooled DATABASE_URL
+  OpenAiKeySecretArn:
+    Type: String
+    Description: Secrets Manager ARN whose value is OPENAI_API_KEY
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets with outbound internet access
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security groups allowing outbound HTTPS and PostgreSQL traffic
+  WorkerCpu:
+    Type: String
+    Default: "1024"
+  WorkerMemory:
+    Type: String
+    Default: "2048"
+  TelescopeModel:
+    Type: String
+    Default: gpt-5-mini
+  WorkerDesiredCount:
+    Type: Number
+    Default: 0
+    Description: Deploy once at 0, push the worker image, then update to 1
+
+Resources:
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT]
+            AllowedOrigins:
+              - !Ref WebOrigin
+              - http://localhost:3000
+            AllowedHeaders: ["content-type"]
+            ExposedHeaders: [etag]
+            MaxAge: 900
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteRawExports
+            Status: Enabled
+            ExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  AnalysisDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  AnalysisQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      ReceiveMessageWaitTimeSeconds: 20
+      VisibilityTimeout: 900
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AnalysisDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  WorkerRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"Keep 20 worker images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}
+
+  WorkerCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: telescope-analysis
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/telescope-analysis-worker
+      RetentionInDays: 30
+
+  WorkerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadWorkerSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseUrlSecretArn
+                  - !Ref OpenAiKeySecretArn
+
+  WorkerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ProcessAnalysisJobs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:ChangeMessageVisibility, sqs:GetQueueAttributes]
+                Resource: !GetAtt AnalysisQueue.Arn
+              - Effect: Allow
+                Action: [s3:GetObject, s3:DeleteObject]
+                Resource: !Sub "${UploadBucket.Arn}/analysis-uploads/*"
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: telescope-analysis-worker
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref WorkerCpu
+      Memory: !Ref WorkerMemory
+      ExecutionRoleArn: !GetAtt WorkerExecutionRole.Arn
+      TaskRoleArn: !GetAtt WorkerTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: worker
+          Image: !Sub "${WorkerRepository.RepositoryUri}:${WorkerImageTag}"
+          Essential: true
+          StopTimeout: 120
+          Environment:
+            - { Name: NODE_ENV, Value: production }
+            - { Name: AWS_REGION, Value: !Ref "AWS::Region" }
+            - { Name: AWS_S3_UPLOAD_BUCKET, Value: !Ref UploadBucket }
+            - { Name: AWS_SQS_ANALYSIS_QUEUE_URL, Value: !Ref AnalysisQueue }
+            - { Name: TELESCOPE_MODEL, Value: !Ref TelescopeModel }
+          Secrets:
+            - { Name: DATABASE_URL, ValueFrom: !Ref DatabaseUrlSecretArn }
+            - { Name: OPENAI_API_KEY, ValueFrom: !Ref OpenAiKeySecretArn }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: worker
+
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: telescope-analysis-worker
+      Cluster: !Ref WorkerCluster
+      TaskDefinition: !Ref WorkerTaskDefinition
+      DesiredCount: !Ref WorkerDesiredCount
+      LaunchType: FARGATE
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 0
+        MaximumPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: !Ref SecurityGroupIds
+
+  VercelAnalysisUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+        - PolicyName: PrepareAnalysisJobs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:PutObject, s3:HeadObject]
+                Resource: !Sub "${UploadBucket.Arn}/analysis-uploads/*"
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt AnalysisQueue.Arn
+
+Outputs:
+  UploadBucketName:
+    Value: !Ref UploadBucket
+  AnalysisQueueUrl:
+    Value: !Ref AnalysisQueue
+  WorkerRepositoryUri:
+    Value: !GetAtt WorkerRepository.RepositoryUri
+  VercelAnalysisUserName:
+    Value: !Ref VercelAnalysisUser

@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Kicker, NightPanel } from "./primitives";
-import type { WrappedStreamEvent } from "./wire";
 import { TELESCOPE_AI_PROGRESS_EVENT, type AiProgressState } from "./Report";
 import { parseExport } from "@/domain/parse";
 import { buildStickerVisuals, filesFromDrop, resultJsonFrom, TELESCOPE_STICKER_VISUALS_EVENT } from "./sticker-assets";
+import { requestAnalysis, waitForAnalysisJob } from "@/lib/analysis-client";
 
 type State =
   | { kind: "idle" }
@@ -46,6 +46,35 @@ export function SavedReportReadingControl({
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
+    if (!processing) return;
+    let active = true;
+    const controller = new AbortController();
+    const resume = async () => {
+      try {
+        const response = await fetch(`/api/analysis-jobs?reportId=${encodeURIComponent(reportId)}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const job = await response.json() as { id: string; status: string };
+        if (job.status !== "QUEUED" && job.status !== "PROCESSING") return;
+        await waitForAnalysisJob(job.id, (note) => {
+          if (!active) return;
+          setState({ kind: "working", note });
+          const stage = aiStage(note);
+          announce({ kind: "working", stage: stage + 1, total: AI_STAGES.length, label: AI_STAGES[stage] });
+        }, controller.signal);
+        if (!active) return;
+        announce({ kind: "done" });
+        router.refresh();
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
+        announce({ kind: "error" });
+        setState({ kind: "error", message: error instanceof Error ? error.message : "The written reading failed." });
+      }
+    };
+    void resume();
+    return () => { active = false; controller.abort(); };
+  }, [processing, reportId, router]);
+
+  useEffect(() => {
     if (!open) return;
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape" && state.kind !== "working") setOpen(false);
@@ -59,52 +88,27 @@ export function SavedReportReadingControl({
     try {
       const file = resultJsonFrom(files);
       if (!file) throw new Error("No result.json was found in that export folder.");
-      const raw = JSON.parse(await file.text()) as unknown;
-      const parsed = parseExport(raw);
+      const rawText = (await file.text()).replace(/^\uFEFF/, "");
+      const parsed = parseExport(JSON.parse(rawText) as unknown);
       parsed.chat.participants = participants;
       const visuals = await buildStickerVisuals(parsed, files);
       if (visuals) {
         try { localStorage.setItem(`telescope:stickers:${reportId}`, JSON.stringify(visuals)); } catch { /* AI analysis can continue without persisted art. */ }
         window.dispatchEvent(new CustomEvent(TELESCOPE_STICKER_VISUALS_EVENT, { detail: visuals }));
       }
-      setState({ kind: "working", note: "Sending the conversation for its written reading" });
-      const response = await fetch("/api/wrapped", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-report-id": reportId },
-        body: JSON.stringify({ export: raw, participants }),
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? `The server returned ${response.status}.`);
-      }
-      if (!response.body) throw new Error("The server returned no progress stream.");
+      setState({ kind: "working", note: "Preparing the private upload" });
       announce({ kind: "working", stage: 1, total: AI_STAGES.length, label: AI_STAGES[0] });
       setOpen(false);
-
-      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buffer = "";
-      let complete = false;
-      const receive = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as WrappedStreamEvent;
-        if (event.type === "progress") {
-          setState({ kind: "working", note: event.note });
-          const stage = aiStage(event.note);
+      await requestAnalysis({
+        raw: rawText,
+        reportId,
+        participants,
+        onProgress(note) {
+          setState({ kind: "working", note });
+          const stage = aiStage(note);
           announce({ kind: "working", stage: stage + 1, total: AI_STAGES.length, label: AI_STAGES[stage] });
-        }
-        if (event.type === "result") complete = true;
-        if (event.type === "error") throw new Error(event.message);
-      };
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += value;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) receive(line);
-      }
-      receive(buffer);
-      if (!complete) throw new Error("The reading ended before the report was updated.");
+        },
+      });
       announce({ kind: "done" });
       try {
         sessionStorage.setItem(`telescope:ai-ready:${reportId}`, "1");
