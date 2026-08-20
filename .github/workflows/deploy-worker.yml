@@ -72,6 +72,9 @@ jobs:
           --parameter-overrides
           WorkerImageTag="${GITHUB_SHA}"
           WorkerDesiredCount=1
+          --tags
+          Application=Telescope
+          Environment=Production
           --no-fail-on-empty-changeset
 
       - name: Verify ECS reaches a steady state
