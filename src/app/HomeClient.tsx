@@ -799,7 +799,7 @@ function Landing({
     <main className="min-h-dvh bg-surface">
       <section className="starfield relative min-h-dvh overflow-hidden bg-night text-white">
         <header className="relative z-10 flex h-[72px] items-center justify-between border-b border-white/12 px-5 sm:px-10 xl:px-16 2xl:px-24">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 rise">
             <Logo size={25} tone="night" />
             <span className="font-display text-[24px]">Telescope</span>
           </div>
@@ -819,22 +819,22 @@ function Landing({
 
         <div className="relative z-[1] grid min-h-[calc(100dvh-72px)] items-center gap-10 px-5 py-10 sm:px-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.72fr)] xl:gap-14 xl:px-16 2xl:px-24">
           <div className="relative z-10 max-w-[760px]">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-lit">
+            <p className="rise font-mono text-[10px] uppercase tracking-[0.2em] text-accent-lit" style={{ animationDelay: "80ms" }}>
               A private instrument for one conversation
             </p>
-            <p className="mt-5 font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em]">
+            <p className="rise mt-5 font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em]" style={{ animationDelay: "140ms" }}>
               Telescope:
             </p>
-            <h1 className="mt-9 max-w-[760px] font-display text-[clamp(2.15rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white">
+            <h1 className="rise mt-9 max-w-[760px] font-display text-[clamp(2.15rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white" style={{ animationDelay: "220ms" }}>
               See the conversation<br />
               <span className="italic text-accent-lit">you were too close to notice.</span>
             </h1>
-            <p className="mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]">
+            <p className="rise mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]" style={{ animationDelay: "300ms" }}>
               Drop one Telegram chat. Get its rhythms, silences, private language, and the parts that only appear when years are seen at once.
             </p>
           </div>
 
-          <div className="grid w-full max-w-[560px] justify-self-end gap-5">
+          <div className="rise grid w-full max-w-[560px] justify-self-end gap-5" style={{ animationDelay: "300ms" }}>
           <div id="drop" className="scroll-mt-4">
           <label
             onDragOver={(e) => {
