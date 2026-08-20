@@ -14,21 +14,28 @@
  * tool whose entire pitch is "we only tell you things we counted" is the one
  * thing it can't afford to do.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ParseError, analyzeParsed, parseExport, type Parsed } from "@/domain";
+import type { Parsed } from "@/domain/parse";
 import type { Analysis } from "@/domain/types";
-import { Report, type AiProgressState, type LocalExtremeEvidence, type LocalStreakMessage } from "@/ui/Report";
-import { ReportActions } from "@/ui/ReportActions";
-import { type DeckCard, buildDeck } from "@/ui/cards";
+import type { AiProgressState, LocalExtremeEvidence, LocalStreakMessage } from "@/ui/Report";
+import type { DeckCard } from "@/ui/cards";
 import { Callout, Kicker, Logo, NightPanel, Panel, Pill, Shield } from "@/ui/primitives";
 import type { WirePayload } from "@/ui/wire";
 import { signOutCurrentUser } from "@/app/actions/auth";
-import { buildStickerVisuals, filesFromDrop, resultJsonFrom, type LocalStickerVisuals } from "@/ui/sticker-assets";
+import type { LocalStickerVisuals } from "@/ui/sticker-assets";
 import { invalidateDashboardData } from "@/app/app/dashboard-data";
 import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
 import { requestAnalysis } from "@/lib/analysis-client";
+
+const Report = lazy(() => import("@/ui/Report").then((module) => ({ default: module.Report })));
+const ReportActions = lazy(() => import("@/ui/ReportActions").then((module) => ({ default: module.ReportActions })));
+
+async function filesFromDrop(dataTransfer: DataTransfer): Promise<File[]> {
+  const { filesFromDrop: collectFiles } = await import("@/ui/sticker-assets");
+  return collectFiles(dataTransfer);
+}
 
 export type Viewer = {
   name: string;
@@ -181,6 +188,10 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
   const load = useCallback(async (files: File[]) => {
     setPhase({ kind: "working", note: "reading the file" });
     try {
+      const [{ ParseError, parseExport }, { resultJsonFrom }] = await Promise.all([
+        import("@/domain/parse"),
+        import("@/ui/sticker-assets"),
+      ]);
       const file = resultJsonFrom(files);
       if (!file) throw new ParseError("No result.json was found.", "Choose the complete Telegram export folder that contains result.json.");
       // JSON.parse rejects a leading byte-order mark even though it is valid in
@@ -196,13 +207,11 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       setPhase({
         kind: "error",
         message:
-          err instanceof ParseError
-            ? err.message
-            : err instanceof SyntaxError
-              ? `The result.json in that folder could not be parsed: ${err.message}`
-              : err instanceof Error
-                ? err.message
-                : "Couldn't read that file.",
+          err instanceof SyntaxError
+            ? `The result.json in that folder could not be parsed: ${err.message}`
+            : err instanceof Error
+              ? err.message
+              : "Couldn't read that file.",
       });
     }
   }, []);
@@ -220,6 +229,11 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       await new Promise<void>((resolve) => {
         window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
       });
+      const [{ analyzeParsed }, { buildDeck }, { buildStickerVisuals }] = await Promise.all([
+        import("@/domain/analyze"),
+        import("@/ui/cards"),
+        import("@/ui/sticker-assets"),
+      ]);
       pendingFile.parsed.chat.participants = participants;
       const analysis = analyzeParsed(pendingFile.parsed);
       const doubleTextMessages = localDoubleTextEvidence(pendingFile.parsed, analysis);
@@ -272,11 +286,9 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       setPhase({
         kind: "error",
         message:
-          err instanceof ParseError
+          err instanceof Error
             ? err.message
-            : err instanceof Error
-                ? err.message
-                : "The report could not be created.",
+            : "The report could not be created.",
       });
     }
   }, [pendingFile, requestLlm, viewer]);
@@ -306,6 +318,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
           ? { kind: "error" }
           : undefined;
     return (
+      <Suspense fallback={<div className="min-h-dvh bg-night" aria-label="Opening report" />}>
       <div className="report-reveal">
       <Report
         analysis={loaded.analysis}
@@ -331,6 +344,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       />
       {saveWarning && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-night px-5 py-3 text-sm text-white shadow-xl">{saveWarning}</div>}
       </div>
+      </Suspense>
     );
   }
 
@@ -782,10 +796,10 @@ function Landing({
   viewer: Viewer;
 }) {
   return (
-    <div className="min-h-dvh bg-surface">
+    <main className="min-h-dvh bg-surface">
       <section className="starfield relative min-h-dvh overflow-hidden bg-night text-white">
         <header className="relative z-10 flex h-[72px] items-center justify-between border-b border-white/12 px-5 sm:px-10 xl:px-16 2xl:px-24">
-          <div className="flex items-center gap-2.5 rise">
+          <div className="flex items-center gap-2.5">
             <Logo size={25} tone="night" />
             <span className="font-display text-[24px]">Telescope</span>
           </div>
@@ -805,22 +819,22 @@ function Landing({
 
         <div className="relative z-[1] grid min-h-[calc(100dvh-72px)] items-center gap-10 px-5 py-10 sm:px-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.72fr)] xl:gap-14 xl:px-16 2xl:px-24">
           <div className="relative z-10 max-w-[760px]">
-            <p className="rise font-mono text-[10px] uppercase tracking-[0.2em] text-accent-lit" style={{ animationDelay: "80ms" }}>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-lit">
               A private instrument for one conversation
             </p>
-            <p className="rise mt-5 font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em]" style={{ animationDelay: "140ms" }}>
+            <p className="mt-5 font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em]">
               Telescope:
             </p>
-            <h1 className="rise mt-9 max-w-[760px] font-display text-[clamp(2.15rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white" style={{ animationDelay: "220ms" }}>
+            <h1 className="mt-9 max-w-[760px] font-display text-[clamp(2.15rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white">
               See the conversation<br />
               <span className="italic text-accent-lit">you were too close to notice.</span>
             </h1>
-            <p className="rise mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]" style={{ animationDelay: "300ms" }}>
+            <p className="mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]">
               Drop one Telegram chat. Get its rhythms, silences, private language, and the parts that only appear when years are seen at once.
             </p>
           </div>
 
-          <div className="rise grid w-full max-w-[560px] justify-self-end gap-5" style={{ animationDelay: "300ms" }}>
+          <div className="grid w-full max-w-[560px] justify-self-end gap-5">
           <div id="drop" className="scroll-mt-4">
           <label
             onDragOver={(e) => {
@@ -930,7 +944,7 @@ function Landing({
       <div id="export" className="scroll-mt-6 bg-shade px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
           <div>
-            <Kicker className="mb-3">Step 1 · get the folder</Kicker>
+            <Kicker tone="deep" className="mb-3">Step 1 · get the folder</Kicker>
             <h2 className="font-display text-[31px] leading-tight text-ink sm:text-[38px]">
               Telegram hands out your history if you ask nicely.
             </h2>
@@ -947,7 +961,7 @@ function Landing({
               ["05", "Choose or drop the complete export folder at the top of this page."],
             ].map(([n, text]) => (
               <div key={n} className="flex gap-3.5">
-                <span className="pt-0.5 font-mono text-[11px] text-accent">{n}</span>
+                <span className="pt-0.5 font-mono text-[11px] text-accent-deep">{n}</span>
                 <span className="text-[14.5px] leading-relaxed text-ink/75">{text}</span>
               </div>
             ))}
@@ -1012,6 +1026,6 @@ function Landing({
           </div>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }

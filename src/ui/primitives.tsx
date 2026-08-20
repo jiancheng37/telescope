@@ -60,17 +60,19 @@ export function Kicker({
   className = "",
 }: {
   children: ReactNode;
-  tone?: "accent" | "lit" | "faint" | "faint-lit";
+  tone?: "accent" | "deep" | "lit" | "faint" | "faint-lit";
   className?: string;
 }) {
   const colour =
     tone === "accent"
       ? "text-accent"
-      : tone === "lit"
-        ? "text-accent-lit"
-        : tone === "faint"
-          ? "text-ink/45"
-          : "text-white/40";
+      : tone === "deep"
+        ? "text-accent-deep"
+        : tone === "lit"
+          ? "text-accent-lit"
+          : tone === "faint"
+            ? "text-ink/45"
+            : "text-white/40";
   return (
     <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${colour} ${className}`}>{children}</p>
   );

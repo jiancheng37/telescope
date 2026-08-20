@@ -32,6 +32,8 @@
 
   /** on light */
   --color-accent: #168acd;
+  /** small text on light surfaces; passes WCAG AA on shade and white */
+  --color-accent-deep: #0f73ad;
   /** on night */
   --color-accent-lit: #2aabee;
 
