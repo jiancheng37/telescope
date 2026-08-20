@@ -66,6 +66,9 @@ UPSTASH_REDIS_REST_URL          shared API rate-limit store
 UPSTASH_REDIS_REST_TOKEN        shared API rate-limit credential
 ```
 
+Vercel's Upstash Marketplace integration names the same two values
+`KV_REST_API_URL` and `KV_REST_API_TOKEN`; Telescope accepts either pair.
+
 The OpenAI key is present only in the ECS task. It is not available to Next.js.
 
 ## ECS worker environment
