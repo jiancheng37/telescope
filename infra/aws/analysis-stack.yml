@@ -111,6 +111,11 @@ Resources:
                 Resource:
                   - !GetAtt WorkerExecutionRole.Arn
                   - !GetAtt WorkerTaskRole.Arn
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSubnets
+                Resource: "*"
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
