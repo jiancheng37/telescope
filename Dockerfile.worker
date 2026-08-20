@@ -13,11 +13,11 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 COPY prisma.config.ts tsconfig.json ./
 COPY prisma ./prisma
-RUN npm ci --include=dev
+RUN npm ci --include=dev \
+  && npm prune --omit=dev
 
 COPY src ./src
 COPY scripts/analysis-worker*.ts ./scripts/
-RUN npm run db:generate
 
 USER node
 CMD ["npm", "run", "worker"]
