@@ -1,0 +1,78 @@
+name: Deploy analysis worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile.worker
+      - infra/aws/**
+      - infra/worker/**
+      - package.json
+      - package-lock.json
+      - prisma/**
+      - prisma.config.ts
+      - scripts/analysis-worker*.ts
+      - src/**
+      - tsconfig.json
+      - .github/workflows/deploy-worker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-analysis-worker
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  AWS_ACCOUNT_ID: "423623836663"
+  ECR_REPOSITORY: telescope-analysis-production-workerrepository-jzdnnnlsvcfs
+  STACK_NAME: telescope-analysis-production
+  DEPLOY_ROLE_ARN: arn:aws:iam::423623836663:role/telescope-analysis-github-deployer
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.worker
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy worker through CloudFormation
+        run: >-
+          aws cloudformation deploy
+          --stack-name "$STACK_NAME"
+          --template-file infra/aws/analysis-stack.yml
+          --capabilities CAPABILITY_NAMED_IAM
+          --parameter-overrides
+          WorkerImageTag="${GITHUB_SHA}"
+          WorkerDesiredCount=1
+          --no-fail-on-empty-changeset
+
+      - name: Verify ECS reaches a steady state
+        run: aws ecs wait services-stable --cluster telescope-analysis --services telescope-analysis-worker
