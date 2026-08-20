@@ -3,15 +3,23 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { signInWithGoogle } from "@/app/actions/auth";
 import { Logo, Shield } from "@/ui/primitives";
+import type { Metadata } from "next";
+import { dashboardUrl } from "@/lib/app-url";
+import { siteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  robots: { index: false, follow: false },
+};
 
 export default async function SignInPage() {
   const session = await auth();
-  if (session?.user) redirect("/app");
+  if (session?.user) redirect(dashboardUrl());
 
   return (
     <main className="starfield relative grid min-h-dvh overflow-hidden bg-night text-white lg:grid-cols-[1.1fr_.9fr]">
       <section className="relative z-10 flex min-h-[48dvh] flex-col justify-between border-b border-white/12 px-6 py-7 sm:px-10 lg:min-h-dvh lg:border-b-0 lg:border-r xl:px-16">
-        <Link href="/" className="rise flex w-fit items-center gap-2.5">
+        <Link href={siteUrl} className="rise flex w-fit items-center gap-2.5">
           <Logo size={26} tone="night" />
           <span className="font-display text-2xl">Telescope</span>
         </Link>
@@ -43,7 +51,7 @@ export default async function SignInPage() {
             <Shield />
             <p>Signing in saves completed model-assisted reports. Local analysis files are still processed in your browser.</p>
           </div>
-          <Link href="/" className="mt-8 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-white/40 transition hover:text-white">← Back home</Link>
+          <Link href={siteUrl} className="mt-8 inline-block font-mono text-[10px] uppercase tracking-[0.16em] text-white/40 transition hover:text-white">← Back home</Link>
         </div>
       </section>
     </main>

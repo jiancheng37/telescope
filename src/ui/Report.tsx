@@ -44,6 +44,10 @@ import {
 import { Callout, Kicker, Logo, Panel, Shield, Stat, StatStrip } from "./primitives";
 import type { Cited, WireChapterNote, WireDynamic, WireFinding, WireLanguageInsight, WireMotif, WirePayload, WireRole, WireTopic, WireWildSentence } from "./wire";
 import { TELESCOPE_STICKER_VISUALS_EVENT, type LocalStickerVisual, type LocalStickerVisuals } from "./sticker-assets";
+import { dashboardUrl } from "@/lib/app-url";
+
+const defaultDashboardHref = dashboardUrl();
+const isDashboardHref = (href: string | null) => href === defaultDashboardHref || href === "/app";
 
 export interface LocalStreakMessage {
   id: number;
@@ -1130,7 +1134,7 @@ function LegacyReport({
   control,
   endControl,
   coverActions,
-  backHref = "/app",
+  backHref = defaultDashboardHref,
   visibilityLabel = "Private",
 }: {
   analysis: Analysis;
@@ -1924,7 +1928,7 @@ function FinaleSlide({
         <div className={`flex flex-wrap items-center gap-3 ${insightControl ? "mt-6" : "mt-7 justify-center"}`}>
           {shareControl && <div className="wrapped-finale-actions">{shareControl}</div>}
           <button type="button" onClick={onRestart} className="inline-flex items-center gap-2 rounded-full border border-white/18 px-6 py-3.5 text-sm font-semibold text-white/62 transition hover:-translate-y-0.5 hover:border-white/45 hover:text-white"><span aria-hidden="true">↺</span> Replay</button>
-          {returnHref && <a href={returnHref} className="inline-flex items-center gap-2 px-4 py-3.5 text-sm font-semibold text-white/42 transition hover:text-white">{returnHref === "/app" ? "Dashboard" : "Home"} <span aria-hidden="true">→</span></a>}
+          {returnHref && <a href={returnHref} className="inline-flex items-center gap-2 px-4 py-3.5 text-sm font-semibold text-white/42 transition hover:text-white">{isDashboardHref(returnHref) ? "Dashboard" : "Home"} <span aria-hidden="true">→</span></a>}
         </div>
       </div>
       {insightControl && (
@@ -1986,7 +1990,7 @@ export function Report({
   endControl,
   guestFinalControl,
   coverActions,
-  backHref = "/app",
+  backHref = defaultDashboardHref,
   visibilityLabel = "Private",
   promptInsightsAtEnd = false,
   doubleTextMessages,
@@ -2193,9 +2197,9 @@ export function Report({
     <main aria-label="Your conversation report" className="relative h-dvh overflow-hidden bg-night" onClick={clickAdvance} onTouchStart={(e) => { touchStart.current = e.touches[0]?.clientX ?? null; }} onTouchEnd={(e) => { if (touchStart.current === null) return; const delta = (e.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current; if (Math.abs(delta) > 45) delta < 0 ? advance() : retreat(); touchStart.current = null; }}>
       {slides.map((slide, index) => <WrappedScreen key={slide.id} slide={slide} active={index === current} index={index} total={slides.length} direction={direction} />)}
       {backHref && <div className="fixed left-5 top-5 z-40 flex items-center gap-3 sm:left-10">
-        <a href={backHref} aria-label={backHref === "/app" ? "Back to dashboard" : "Back home"} className="report-back-button inline-flex h-11 items-center gap-2.5 rounded-full border border-white/14 bg-night/72 px-4 font-mono text-[9px] uppercase tracking-[.16em] text-white/58 backdrop-blur transition hover:border-accent-lit hover:text-white">
+        <a href={backHref} aria-label={isDashboardHref(backHref) ? "Back to dashboard" : "Back home"} className="report-back-button inline-flex h-11 items-center gap-2.5 rounded-full border border-white/14 bg-night/72 px-4 font-mono text-[9px] uppercase tracking-[.16em] text-white/58 backdrop-blur transition hover:border-accent-lit hover:text-white">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 fill-none stroke-current" strokeWidth="1.7"><path d="M19 12H5m0 0 5-5m-5 5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          <span>{backHref === "/app" ? "Dashboard" : "Home"}</span>
+          <span>{isDashboardHref(backHref) ? "Dashboard" : "Home"}</span>
         </a>
       </div>}
       {coverActions && <div className={`report-cover-actions fixed right-5 top-5 z-40 sm:right-10 ${slides[current]?.tone === "light" ? "report-actions-light" : ""}`}>{coverActions}</div>}

@@ -8,6 +8,7 @@ import { Report } from "@/ui/Report";
 import { ReportActions } from "@/ui/ReportActions";
 import { SavedReportReadingControl } from "@/ui/SavedReportReadingControl";
 import { Prisma } from "@/generated/prisma/client";
+import { dashboardUrl } from "@/lib/app-url";
 
 export default async function SavedReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ insights?: string | string[] }> }) {
   const session = await auth();
@@ -25,5 +26,5 @@ export default async function SavedReportPage({ params, searchParams }: { params
   if (accountName) analysis.chat.participants = [saved.participantA, accountName];
   const llm = saved.llm ? (saved.llm as unknown as WirePayload) : null;
   const participants: [string, string] = [saved.participantA, accountName || saved.participantB];
-  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(llm)} initialIncludeMessages={saved.sharedMessagesVisible} />} backHref="/app" promptInsightsAtEnd localEvidenceKey={id} />;
+  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(llm)} initialIncludeMessages={saved.sharedMessagesVisible} />} backHref={dashboardUrl()} promptInsightsAtEnd localEvidenceKey={id} />;
 }

@@ -28,6 +28,7 @@ import type { LocalStickerVisuals } from "@/ui/sticker-assets";
 import { invalidateDashboardData } from "@/app/app/dashboard-data";
 import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
 import { requestAnalysis } from "@/lib/analysis-client";
+import { applicationUrl, dashboardUrl } from "@/lib/app-url";
 
 const Report = lazy(() => import("@/ui/Report").then((module) => ({ default: module.Report })));
 const ReportActions = lazy(() => import("@/ui/ReportActions").then((module) => ({ default: module.ReportActions })));
@@ -325,7 +326,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         deck={loaded.deck}
         llm={llm}
         coverActions={loaded.reportId ? <ReportActions reportId={loaded.reportId} canConfigureMessages={Boolean(llm)} /> : undefined}
-        backHref={viewer ? "/app" : "/"}
+        backHref={viewer ? dashboardUrl() : "/"}
         promptInsightsAtEnd={Boolean(viewer)}
         doubleTextMessages={loaded.doubleTextMessages}
         localEvidenceKey={loaded.reportId ?? undefined}
@@ -806,13 +807,13 @@ function Landing({
           <div className="flex items-center gap-4">
             {viewer ? (
               <>
-                <Link href="/app" className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/60 transition hover:text-white">
+                <Link href={dashboardUrl()} className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/60 transition hover:text-white">
                   Dashboard
                 </Link>
                 <form action={signOutCurrentUser}><button className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35 hover:text-white">Sign out</button></form>
               </>
             ) : (
-              <Link href="/sign-in" className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent-lit hover:text-white">Log in / sign up</Link>
+              <Link href={applicationUrl("/sign-in")} className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent-lit hover:text-white">Log in / sign up</Link>
             )}
           </div>
         </header>
@@ -1005,11 +1006,11 @@ function Landing({
             </div>
             <div className="flex flex-col gap-2.5 text-sm">
               <Kicker tone="faint-lit" className="mb-1">
-                How it works
+                Field notes
               </Kicker>
-              <span>Counted in your browser</span>
-              <span>Every claim carries a quote</span>
-              <span>Quotes checked before they render</span>
+              <Link href="/guides/export-telegram-chat" className="transition hover:text-white">Export a Telegram chat</Link>
+              <Link href="/guides/chat-analysis-methodology" className="transition hover:text-white">How analysis works</Link>
+              <Link href="/guides/private-chat-analysis" className="transition hover:text-white">Private chat analysis</Link>
             </div>
             <div className="flex flex-col gap-2.5 text-sm">
               <Kicker tone="faint-lit" className="mb-1">

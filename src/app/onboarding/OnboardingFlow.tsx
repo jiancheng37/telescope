@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { dashboardUrl } from "@/lib/app-url";
 import { Logo, Shield } from "@/ui/primitives";
 
 const steps = [
@@ -21,7 +22,7 @@ export function OnboardingFlow({ suggestedName }: { suggestedName: string }) {
     try {
       const response = await fetch("/api/settings/account", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ reportName: name }) });
       if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; throw new Error(body?.error ?? "Your name could not be saved."); }
-      router.push("/app"); router.refresh();
+      router.push(dashboardUrl()); router.refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Your name could not be saved."); setWorking(false); }
   };
   const naming = step === steps.length;

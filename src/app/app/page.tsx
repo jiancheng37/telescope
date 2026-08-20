@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { dashboardUrl } from "@/lib/app-url";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardWorkspace, type DashboardCollection, type DashboardConversation } from "./DashboardWorkspace";
 import { invalidateDashboardData, loadDashboardData, peekDashboardData, storeDashboardData } from "./dashboard-data";
@@ -23,7 +24,7 @@ export default function DashboardPage() {
   return <>
     <PendingReportSaver />
     <section className="px-5 py-6 min-[640px]:py-10 sm:px-10 lg:px-14 lg:py-14 xl:px-20">
-      <header className="flex flex-wrap items-end justify-between gap-6 border-b border-ink/14 pb-9 max-[640px]:border-b-0 max-[640px]:pb-0"><div className="max-[640px]:hidden"><p className="font-mono text-[10px] uppercase tracking-[.17em] text-accent">Workspace</p><h1 className="mt-3 font-display text-[48px] leading-none sm:text-[66px]">Your analyses</h1></div><Link href="/app/new" prefetch className="dashboard-analyze-cta group inline-flex items-center gap-3 rounded-full bg-night px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent max-[768px]:hidden">Analyze a conversation</Link></header>
+      <header className="flex flex-wrap items-end justify-between gap-6 border-b border-ink/14 pb-9 max-[640px]:border-b-0 max-[640px]:pb-0"><div className="max-[640px]:hidden"><p className="font-mono text-[10px] uppercase tracking-[.17em] text-accent">Workspace</p><h1 className="mt-3 font-display text-[48px] leading-none sm:text-[66px]">Your analyses</h1></div><Link href={dashboardUrl("/new")} prefetch className="dashboard-analyze-cta group inline-flex items-center gap-3 rounded-full bg-night px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-accent max-[768px]:hidden">Analyze a conversation</Link></header>
       {data ? <DashboardWorkspace initialReports={data.reports} initialCollections={data.collections} onSnapshot={snapshot} /> : error ? <div className="mt-8 border-y border-ink/14 py-12"><p className="font-display text-3xl">The dashboard could not load.</p><button type="button" onClick={() => { setError(null); setData(null); }} className="mt-4 text-sm font-semibold text-accent">Try again</button></div> : <div className="mt-8 space-y-5" aria-label="Loading conversations">{[0,1,2].map((item) => <div key={item} className="h-20 animate-pulse border-b border-ink/10 bg-gradient-to-r from-ink/[.035] to-transparent" />)}</div>}
     </section>
   </>;
