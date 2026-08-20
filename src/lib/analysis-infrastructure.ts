@@ -42,4 +42,6 @@ export function dailyAnalysisLimit() {
 }
 
 export const ANALYSIS_UPLOAD_TTL_SECONDS = 15 * 60;
-export const ANALYSIS_JOB_TTL_MS = 24 * 60 * 60 * 1000;
+// The signed upload lasts 15 minutes; leave another 15 minutes for a completed
+// browser upload to call the verification endpoint before maintenance closes it.
+export const ANALYSIS_JOB_TTL_MS = 30 * 60 * 1000;

@@ -10,10 +10,21 @@ import { toWire } from "../src/ui/wire";
 import { completeReport } from "../src/lib/reports";
 import { prisma } from "../src/lib/prisma";
 import { analysisInfrastructure, maximumExportBytes } from "../src/lib/analysis-infrastructure";
+import { closeStaleAnalysisJobs } from "../src/lib/analysis-job-maintenance";
+import * as Sentry from "@sentry/node";
 
 const MAX_ATTEMPTS = 3;
 const VISIBILITY_SECONDS = 15 * 60;
 let stopping = false;
+let nextMaintenanceAt = 0;
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  enabled: Boolean(process.env.SENTRY_DSN),
+  sendDefaultPii: false,
+  includeLocalVariables: false,
+  tracesSampleRate: 0,
+});
 
 process.on("SIGTERM", () => { stopping = true; });
 process.on("SIGINT", () => { stopping = true; });
@@ -94,6 +105,7 @@ async function processJob(jobId: string) {
     finished = true;
     const message = error instanceof Error ? error.message : "The analysis worker failed.";
     console.error(`[analysis-worker] job ${job.id}`, error);
+    Sentry.captureException(error, { tags: { component: "analysis-worker", jobId: job.id } });
     if (job.attempts < MAX_ATTEMPTS) {
       console.warn(
         `[analysis-worker] job ${job.id} queued for retry (${job.attempts}/${MAX_ATTEMPTS})`,
@@ -120,6 +132,19 @@ async function main() {
   const { s3, sqs, bucket, queueUrl } = analysisInfrastructure();
   console.log("[analysis-worker] waiting for jobs");
   while (!stopping) {
+    if (Date.now() >= nextMaintenanceAt) {
+      nextMaintenanceAt = Date.now() + 5 * 60 * 1_000;
+      try {
+        const staleJobs = await closeStaleAnalysisJobs();
+        for (const stale of staleJobs) {
+          await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: stale.storageKey }));
+          console.warn(`[analysis-worker] job ${stale.id} closed as stale (${stale.previousStatus})`);
+        }
+      } catch (error) {
+        console.error("[analysis-worker] stale job cleanup failed", error);
+        Sentry.captureException(error, { tags: { component: "analysis-worker", operation: "stale-cleanup" } });
+      }
+    }
     const response = await sqs.send(new ReceiveMessageCommand({
       QueueUrl: queueUrl,
       MaxNumberOfMessages: 1,
@@ -167,5 +192,6 @@ async function main() {
 
 main().catch((error) => {
   console.error("[analysis-worker] fatal", error);
+  Sentry.captureException(error, { tags: { component: "analysis-worker", fatal: "true" } });
   process.exitCode = 1;
 });

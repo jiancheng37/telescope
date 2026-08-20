@@ -1,0 +1,44 @@
+name: Migrate production database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  DEPLOY_ROLE_ARN: arn:aws:iam::423623836663:role/telescope-analysis-github-deployer
+  DATABASE_SECRET_ARN: arn:aws:secretsmanager:ap-southeast-1:423623836663:secret:telescope/production/database-url-RKqclF
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read the production database URL
+        run: |
+          value="$(aws secretsmanager get-secret-value --secret-id "$DATABASE_SECRET_ARN" --query SecretString --output text)"
+          echo "::add-mask::$value"
+          echo "DATABASE_URL=$value" >> "$GITHUB_ENV"
+      - run: npm ci
+      - name: Show migration status
+        run: NODE_ENV=production npx prisma migrate status
+      - name: Apply production migrations
+        run: npm run db:migrate:production
+        env:
+          CONFIRM_PRODUCTION_MIGRATION: "1"

@@ -34,10 +34,23 @@ Parameters:
     Type: Number
     Default: 0
     Description: Deploy once at 0, push the worker image, then update to 1
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: Optional email address subscribed to production alarm notifications
+  SentryDsn:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional Sentry DSN for worker exceptions
   GitHubOidcSubject:
     Type: String
     Default: repo:jiancheng37@163821508/telescope@1338245925:ref:refs/heads/main
     Description: Exact GitHub OIDC subject allowed to deploy the production worker
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
+  HasSentryDsn: !Not [!Equals [!Ref SentryDsn, ""]]
 
 Resources:
   GitHubActionsOidcProvider:
@@ -120,6 +133,9 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeSubnets
                 Resource: "*"
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseUrlSecretArn
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -257,6 +273,10 @@ Resources:
             - { Name: AWS_S3_UPLOAD_BUCKET, Value: !Ref UploadBucket }
             - { Name: AWS_SQS_ANALYSIS_QUEUE_URL, Value: !Ref AnalysisQueue }
             - { Name: TELESCOPE_MODEL, Value: !Ref TelescopeModel }
+            - !If
+              - HasSentryDsn
+              - { Name: SENTRY_DSN, Value: !Ref SentryDsn }
+              - !Ref "AWS::NoValue"
           Secrets:
             - { Name: DATABASE_URL, ValueFrom: !Ref DatabaseUrlSecretArn }
             - { Name: OPENAI_API_KEY, ValueFrom: !Ref OpenAiKeySecretArn }
@@ -295,11 +315,117 @@ Resources:
             Statement:
               - Effect: Allow
                 # S3 authorizes the HeadObject API with the s3:GetObject action.
-                Action: [s3:PutObject, s3:GetObject]
+                Action: [s3:PutObject, s3:GetObject, s3:DeleteObject]
                 Resource: !Sub "${UploadBucket.Arn}/analysis-uploads/*"
               - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt AnalysisQueue.Arn
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Telescope production alarms
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  QueueBacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Analysis jobs are accumulating in the production queue.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - { Name: QueueName, Value: !GetAtt AnalysisQueue.QueueName }
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  QueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The oldest analysis job has waited longer than 20 minutes.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - { Name: QueueName, Value: !GetAtt AnalysisQueue.QueueName }
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1200
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  DeadLetterQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: An analysis job reached the dead-letter queue.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - { Name: QueueName, Value: !GetAtt AnalysisDeadLetterQueue.QueueName }
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  WorkerCountAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The production analysis worker is not running.
+      Namespace: ECS/ContainerInsights
+      MetricName: RunningTaskCount
+      Dimensions:
+        - { Name: ClusterName, Value: !Ref WorkerCluster }
+        - { Name: ServiceName, Value: telescope-analysis-worker }
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 5
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  WorkerErrorMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref WorkerLogGroup
+      FilterPattern: '?"[analysis-worker] fatal" ?"stale job cleanup failed" ?"failed after"'
+      MetricTransformations:
+        - MetricNamespace: Telescope/Analysis
+          MetricName: WorkerErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  WorkerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The production analysis worker logged an error.
+      Namespace: Telescope/Analysis
+      MetricName: WorkerErrors
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
 
 Outputs:
   UploadBucketName:
@@ -312,3 +438,5 @@ Outputs:
     Value: !Ref VercelAnalysisUser
   GitHubActionsDeployRoleArn:
     Value: !GetAtt GitHubActionsDeployRole.Arn
+  AlarmTopicArn:
+    Value: !Ref AlarmTopic

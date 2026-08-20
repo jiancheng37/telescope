@@ -7,7 +7,7 @@ import { Kicker, NightPanel } from "./primitives";
 import { TELESCOPE_AI_PROGRESS_EVENT, type AiProgressState } from "./Report";
 import { parseExport } from "@/domain/parse";
 import { buildStickerVisuals, filesFromDrop, resultJsonFrom, TELESCOPE_STICKER_VISUALS_EVENT } from "./sticker-assets";
-import { requestAnalysis, waitForAnalysisJob } from "@/lib/analysis-client";
+import { cancelAnalysisJob, requestAnalysis, waitForAnalysisJob } from "@/lib/analysis-client";
 
 type State =
   | { kind: "idle" }
@@ -44,6 +44,7 @@ export function SavedReportReadingControl({
   const [state, setState] = useState<State>({ kind: "idle" });
   const [open, setOpen] = useState(startOpen && !processing);
   const [dragging, setDragging] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!processing) return;
@@ -55,6 +56,7 @@ export function SavedReportReadingControl({
         if (!response.ok) return;
         const job = await response.json() as { id: string; status: string };
         if (job.status !== "QUEUED" && job.status !== "PROCESSING") return;
+        setActiveJobId(job.id);
         await waitForAnalysisJob(job.id, (note) => {
           if (!active) return;
           setState({ kind: "working", note });
@@ -63,6 +65,7 @@ export function SavedReportReadingControl({
         }, controller.signal);
         if (!active) return;
         announce({ kind: "done" });
+        setActiveJobId(null);
         router.refresh();
       } catch (error) {
         if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
@@ -108,8 +111,10 @@ export function SavedReportReadingControl({
           const stage = aiStage(note);
           announce({ kind: "working", stage: stage + 1, total: AI_STAGES.length, label: AI_STAGES[stage] });
         },
+        onJobCreated: setActiveJobId,
       });
       announce({ kind: "done" });
+      setActiveJobId(null);
       try {
         sessionStorage.setItem(`telescope:ai-ready:${reportId}`, "1");
       } catch {
@@ -133,6 +138,19 @@ export function SavedReportReadingControl({
     }
   };
 
+  const cancel = async () => {
+    if (!activeJobId) return;
+    try {
+      await cancelAnalysisJob(activeJobId);
+      setActiveJobId(null);
+      announce({ kind: "error" });
+      setState({ kind: "error", message: "Analysis cancelled. You can try again whenever you are ready." });
+      router.refresh();
+    } catch (error) {
+      setState({ kind: "error", message: error instanceof Error ? error.message : "The analysis could not be cancelled." });
+    }
+  };
+
   return (
     <>
       <NightPanel className="ai-insights-panel border border-accent-lit/45 shadow-[inset_0_0_0_1px_rgba(42,171,238,.06)]">
@@ -144,6 +162,7 @@ export function SavedReportReadingControl({
         </ul>
         <button type="button" disabled={processing || state.kind === "working"} onClick={() => setOpen(true)} className="mt-5 w-full rounded-full bg-accent-lit px-5 py-3 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-wait disabled:opacity-55">{processing || state.kind === "working" ? "AI insights are running…" : "Get new insights"}</button>
         {processing && <p className="mt-3 font-mono text-[9px] uppercase tracking-[.12em] text-accent-lit">You can keep reading this report while the model finishes.</p>}
+        {activeJobId && <button type="button" onClick={() => void cancel()} className="mt-3 text-xs text-white/45 underline decoration-white/25 underline-offset-4 transition hover:text-white">Cancel and try again</button>}
         {state.kind === "error" && <p className="mt-3 text-sm leading-relaxed text-side-a">{state.message}</p>}
       </NightPanel>
 

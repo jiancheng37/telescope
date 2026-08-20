@@ -44,11 +44,15 @@ export async function requestAnalysis({
   reportId,
   participants,
   onProgress,
+  onJobCreated,
+  signal,
 }: {
   raw: string;
   reportId: string;
   participants: [string, string];
   onProgress?: (note: string) => void;
+  onJobCreated?: (jobId: string) => void;
+  signal?: AbortSignal;
 }): Promise<WirePayload> {
   const uploadBytes = new TextEncoder().encode(raw).byteLength;
   onProgress?.("Preparing a private upload");
@@ -59,6 +63,7 @@ export async function requestAnalysis({
   });
   if (!created.ok) throw await errorFrom(created, `The analysis service returned ${created.status}.`);
   const { jobId, uploadUrl } = await created.json() as { jobId: string; uploadUrl: string };
+  onJobCreated?.(jobId);
 
   onProgress?.("Uploading the conversation privately");
   const uploaded = await fetch(uploadUrl, {
@@ -71,5 +76,10 @@ export async function requestAnalysis({
   const queued = await fetch(`/api/analysis-jobs/${jobId}/uploaded`, { method: "POST" });
   if (!queued.ok) throw await errorFrom(queued, `The analysis job could not be queued (${queued.status}).`);
 
-  return waitForAnalysisJob(jobId, onProgress);
+  return waitForAnalysisJob(jobId, onProgress, signal);
+}
+
+export async function cancelAnalysisJob(jobId: string) {
+  const response = await fetch(`/api/analysis-jobs/${jobId}`, { method: "DELETE" });
+  if (!response.ok) throw await errorFrom(response, `The analysis could not be cancelled (${response.status}).`);
 }

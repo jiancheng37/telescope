@@ -2,7 +2,7 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 
-export type RateLimitAction = "analysis-create" | "analysis-uploaded" | "analysis-poll";
+export type RateLimitAction = "analysis-create" | "analysis-uploaded" | "analysis-poll" | "analysis-cancel";
 
 type RateLimitRule = {
   limit: number;
@@ -22,6 +22,7 @@ const RULES: Record<RateLimitAction, RateLimitRule> = {
   "analysis-create": { limit: 5, windowMs: 60_000, window: "1 m", failClosed: true },
   "analysis-uploaded": { limit: 10, windowMs: 60_000, window: "1 m", failClosed: true },
   "analysis-poll": { limit: 30, windowMs: 60_000, window: "1 m", failClosed: false },
+  "analysis-cancel": { limit: 5, windowMs: 60_000, window: "1 m", failClosed: true },
 };
 
 type MemoryBuckets = Map<string, number[]>;
