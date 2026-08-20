@@ -119,7 +119,7 @@ export function buildDeck(analysis: Analysis): DeckCard[] {
       headline: `${pct(top10.share)} of it, in ten conversations`,
       detail:
         `There were ${num(analysis.sessionSummary.count)} separate bursts of talking — a burst ends after ` +
-        `45 minutes of quiet — and the ten busiest hold ${num(top10.messages)} messages, ` +
+        `two hours of quiet — and the ten busiest hold ${num(top10.messages)} messages, ` +
         `${pct(top10.share)} of everything either of you ever sent. The median burst is ` +
         `${analysis.sessionSummary.medianMessages.toFixed(0)} messages long.`,
       // No splits. This is a fact about the corpus, not about either person, and a
@@ -294,7 +294,7 @@ export function buildDeck(analysis: Analysis): DeckCard[] {
       headline: "Things that turned out not to be true",
       detail:
         `These were all measured. None of them showed a real difference between the two of you, so there is ` +
-        `no card for them. A wrapped that only shows you the hits is lying by omission.`,
+        `no card for them. A report that only shows you the hits is lying by omission.`,
       items: flat,
     });
   }

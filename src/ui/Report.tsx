@@ -471,8 +471,7 @@ function MonthlyChart({ analysis, names }: { analysis: Analysis; names: [string,
         <div className="mt-8 max-w-[80ch]">
           <Callout>
             <b>{monthYear(gap.fromTs)}:</b> {num(gap.days)} days of nothing — the longest silence in
-            the whole span. {names[gap.wentQuiet]} sent the last message before it,{" "}
-            {names[gap.revivedBy]} sent the first one after.
+            the whole span.
           </Callout>
         </div>
       )}
@@ -1473,8 +1472,8 @@ function OverviewSlide({ analysis, names }: { analysis: Analysis; names: [string
   return (
     <div>
       <WrappedHead eyebrow="The conversation at a glance" copy={`${names[0]} and ${names[1]}, across ${num(Math.round(analysis.span.days))} calendar days.`}>You two had<br />a lot to say.</WrappedHead>
-      <dl className="mt-10 grid grid-cols-2 border-y border-white/14 lg:grid-cols-4">
-        {stats.map(([value, label], i) => <div key={label} className={`py-5 lg:px-6 ${i ? "border-l border-white/14" : ""}`}><dd className="font-display text-[clamp(2rem,4vw,4.4rem)] leading-none text-white">{value}</dd><dt className="mt-2 font-mono text-[9px] uppercase tracking-[0.18em] text-white/38">{label}</dt></div>)}
+      <dl className="mt-10 grid grid-cols-2 border-y border-white/14 min-[1024px]:grid-cols-4">
+        {stats.map(([value, label], i) => <div key={label} className={`py-5 min-[1024px]:px-6 ${i % 2 ? "border-l border-white/14 pl-5" : ""} ${i ? "min-[1024px]:border-l min-[1024px]:border-white/14" : ""}`}><dd className="font-display text-[clamp(2rem,4vw,4.4rem)] leading-none text-white">{value}</dd><dt className="mt-2 font-mono text-[9px] uppercase tracking-[0.18em] text-white/38">{label}</dt></div>)}
       </dl>
     </div>
   );
@@ -1594,7 +1593,7 @@ function DoubleTexterSlide({ analysis, names, messages }: { analysis: Analysis; 
                 <div className="py-12 text-center"><p className="font-display text-3xl">The messages stayed on the original device.</p><p className="mx-auto mt-4 max-w-[48ch] text-sm leading-relaxed text-white/48">Telescope saved the streak&rsquo;s message IDs and timing, but not the conversation text. Open this report in the browser where it was created to view the messages.</p></div>
               )}
             </div>
-            <footer className="border-t border-white/12 px-6 py-4 font-mono text-[8px] uppercase tracking-[.13em] text-white/28 sm:px-8">Stored in this browser only · never included in shared reports</footer>
+            <footer className="border-t border-white/12 px-6 py-4 font-mono text-[8px] uppercase tracking-[.13em] text-white/28 sm:px-8">Hidden from insights-only links · included only when private messages are shared</footer>
           </section>
         </div>
       )}
@@ -1607,7 +1606,7 @@ function ConcentrationSlide({ analysis }: { analysis: Analysis }) {
   const day = analysis.concentration.busiestDays[0];
   return (
     <div>
-      <WrappedHead eyebrow="Where it actually happened" copy={`A conversation ends after 45 minutes of quiet. There were ${num(analysis.sessionSummary.count)} separate bursts in total.`}>
+      <WrappedHead eyebrow="Where it actually happened" copy={`A conversation ends after two hours of quiet. There were ${num(analysis.sessionSummary.count)} separate bursts in total.`}>
         {top ? <><span className="text-accent-lit">{pct(top.share)}</span> of everything happened in just ten conversations.</> : <>A few conversations did most of the work.</>}
       </WrappedHead>
       <div className="mt-10 grid max-w-[920px] gap-px overflow-hidden rounded-2xl bg-white/12 sm:grid-cols-3">
@@ -1636,7 +1635,7 @@ function CommunicationSlide({ analysis, names, stickerVisuals }: { analysis: Ana
           const t = side === 0 ? tele.a : tele.b;
           const v = side === 0 ? voice.a : voice.b;
           const visual = side === 0 ? stickerVisuals?.a : stickerVisuals?.b;
-          return <section key={side} className="border-t pt-5" style={{ borderColor: sideVar(side) }}><p className="font-mono text-[10px] uppercase tracking-[.2em]" style={{ color: sideVar(side) }}>{names[side]}</p><p className="mt-4 text-[clamp(2rem,4vw,4.4rem)] leading-none">{topEmoji(side)}</p>{visual?.length ? <div className="mt-5"><p className="mb-2 font-mono text-[7px] uppercase tracking-[.13em] text-white/28">Top sent stickers</p><div className="grid max-w-[500px] grid-cols-5 gap-2">{visual.map((sticker) => <StickerSpecimen key={sticker.path} sticker={sticker} />)}</div></div> : null}<p className="mt-5 text-sm leading-7 text-white/52">{num(e)} emoji · {num(s)} stickers<br />{num(t.count)} telebubbles · {dur(t.totalSeconds)}<br />{num(v.count)} voice notes · {dur(v.totalSeconds)}</p></section>;
+          return <section key={side} className="border-t pt-5" style={{ borderColor: sideVar(side) }}><p className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[.2em]" style={{ color: sideVar(side) }}>{names[side]}</p><p className="mt-4 text-[clamp(2rem,4vw,4.4rem)] leading-none">{topEmoji(side)}</p>{visual?.length ? <div className="mt-5"><p className="mb-2 font-mono text-[8px] uppercase tracking-[.13em] text-white/28">Top sent stickers</p><div className="grid max-w-[400px] grid-cols-5 gap-2 max-[1024px]:w-3/5">{visual.map((sticker) => <StickerSpecimen key={sticker.path} sticker={sticker} />)}</div></div> : null}<p className="sr-only">{num(e)} emoji, {num(s)} stickers, {num(t.count)} telebubbles lasting {dur(t.totalSeconds)}, and {num(v.count)} voice notes lasting {dur(v.totalSeconds)}</p><div aria-hidden="true" className="communication-stat-cycle mt-4 font-mono text-[8px] uppercase tracking-[.08em] text-white/42"><span>{num(e)} emoji · {num(s)} stickers</span><span>{num(t.count)} telebubbles · {dur(t.totalSeconds)}</span><span>{num(v.count)} voice notes · {dur(v.totalSeconds)}</span></div></section>;
         })}
       </div>
     </div>
@@ -1654,7 +1653,7 @@ function LanguageSlide({ card, names, reading, selection }: { card: DeckCard & {
         <div className="mt-8 grid gap-7 lg:grid-cols-2">
           {([0, 1] as const).map((side) => {
             const insights = (side === 0 ? modern.a : modern.b).slice(0, 2);
-            return <section key={side} className="border-t pt-4" style={{ borderColor: sideVar(side) }}><p className="font-mono text-[9px] uppercase tracking-[.18em]" style={{ color: sideVar(side) }}>{names[side]}</p><div className="mt-3 space-y-4">{insights.map((item, index) => <article key={item.candidateId} className={index ? "border-t border-white/10 pt-4" : ""}><p className="font-display text-[clamp(1.8rem,3.4vw,3.8rem)] leading-none text-white">“{item.text}”</p><p className="mt-2 font-mono text-[8px] uppercase tracking-[.14em] text-accent-lit/70">{item.category.replaceAll("-", " ")}</p><p className="mt-2 max-w-[48ch] text-xs leading-relaxed text-white/48">{item.explanation}</p></article>)}</div></section>;
+            return <section key={side} className="border-t pt-4" style={{ borderColor: sideVar(side) }}><p className="font-mono text-[9px] uppercase tracking-[.18em]" style={{ color: sideVar(side) }}>{names[side]}</p><div className="mt-3 space-y-4 max-[1024px]:grid max-[1024px]:grid-cols-2 max-[1024px]:gap-4 max-[1024px]:space-y-0">{insights.map((item, index) => <article key={item.candidateId} className={index ? "border-t border-white/10 pt-4 max-[1024px]:border-l max-[1024px]:border-t-0 max-[1024px]:pl-4 max-[1024px]:pt-0" : ""}><p className="font-display text-[clamp(1.8rem,3.4vw,3.8rem)] leading-none text-white">“{item.text}”</p><p className="mt-2 font-mono text-[8px] uppercase tracking-[.14em] text-accent-lit/70">{item.category.replaceAll("-", " ")}</p><p className="mt-2 max-w-[48ch] text-xs leading-relaxed text-white/48">{item.explanation}</p></article>)}</div></section>;
           })}
         </div>
         {modern.shared[0] && <div className="mt-7 flex items-baseline gap-4 border-t border-white/12 pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-white/32">What became yours</p><p className="font-display text-[clamp(1.4rem,2.5vw,2.5rem)] italic text-accent-lit">“{modern.shared[0].text}”</p><p className="hidden max-w-[42ch] text-xs text-white/42 md:block">{modern.shared[0].explanation}</p></div>}
@@ -1822,7 +1821,7 @@ function ExtremesWrappedSlide({ analysis, names, evidence }: { analysis: Analysi
           <section className="rise flex max-h-[86dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-[26px] border border-white/14 bg-night text-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <header className="flex items-start justify-between gap-5 border-b border-white/12 px-6 py-5 sm:px-8 sm:py-6"><div><p className="font-mono text-[9px] uppercase tracking-[.18em] text-accent-lit">The receipts</p><h2 id="extreme-receipt-title" className="mt-2 font-display text-[clamp(2rem,5vw,3.8rem)] leading-none">{open === "message" ? "The longest message." : "The longest unbroken run."}</h2><p className="mt-3 text-sm text-white/45">{open === "message" ? `${names[longestSide]} wrote ${num(Math.max(len.a.max, len.b.max))} characters.` : `${names[runSide]} sent ${num(Math.max(mono.a.maxRunLength, mono.b.maxRunLength))} messages before anything came back.`}</p></div><button type="button" onClick={() => setOpen(null)} aria-label="Close receipt" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/16 text-xl text-white/45 transition hover:border-white/40 hover:text-white">×</button></header>
             <div className="overflow-y-auto px-5 py-6 sm:px-8">{shown?.length ? <ol className="space-y-3">{shown.map((message) => <li key={message.id} className={`flex ${message.who === 0 ? "justify-start" : "justify-end"}`}><div className="max-w-[88%]"><p className="mb-1 px-1 font-mono text-[8px] uppercase tracking-[.12em]" style={{ color: sideVar(message.who) }}>{names[message.who]} · {new Date(message.ts * 1000).toLocaleString()}</p><p className="whitespace-pre-wrap break-words rounded-[18px] border border-white/10 bg-white/[.06] px-4 py-3 text-sm leading-relaxed text-white/78">{message.body}</p></div></li>)}</ol> : <div className="py-12 text-center"><p className="font-display text-3xl">The text stayed on the original device.</p><p className="mx-auto mt-4 max-w-[48ch] text-sm leading-relaxed text-white/48">Only the winning message IDs and measurements were saved. Open this report in the browser where it was generated to reveal the content.</p></div>}</div>
-            <footer className="border-t border-white/12 px-6 py-4 font-mono text-[8px] uppercase tracking-[.13em] text-white/28 sm:px-8">Stored in this browser only · never included in shared reports</footer>
+            <footer className="border-t border-white/12 px-6 py-4 font-mono text-[8px] uppercase tracking-[.13em] text-white/28 sm:px-8">Hidden from insights-only links · included only when private messages are shared</footer>
           </section>
         </div>
       )}
@@ -1831,12 +1830,25 @@ function ExtremesWrappedSlide({ analysis, names, evidence }: { analysis: Analysi
 }
 
 function CharacterSlide({ roles, names }: { roles: { a: WireRole[]; b: WireRole[] }; names: [string, string] }) {
+  const [roleIndexes, setRoleIndexes] = useState<[number, number]>([0, 0]);
+  const moveRole = (side: 0 | 1, delta: number) => {
+    const personRoles = side === 0 ? roles.a : roles.b;
+    if (personRoles.length < 2) return;
+    setRoleIndexes((current) => {
+      const next: [number, number] = [...current];
+      next[side] = (current[side] + delta + personRoles.length) % personRoles.length;
+      return next;
+    });
+  };
+  const roleCard = (role: WireRole, index: number) => <article key={role.id}><p className="font-mono text-[9px] uppercase tracking-[.16em] text-white/28">Role {String(index + 1).padStart(2, "0")}</p><h4 className="mt-1 font-display text-[clamp(1.4rem,2.2vw,2.25rem)] leading-tight text-white/90">{role.title}</h4><p className="mt-2 max-w-[46ch] text-sm leading-relaxed text-white/52">{role.description}</p>{role.evidence[0] && <p className="mt-3 line-clamp-2 border-l border-white/16 pl-3 text-xs italic leading-relaxed text-white/36">“{role.evidence[0].quote}”</p>}</article>;
   return (
     <div>
-      <WrappedHead eyebrow="AI character cards" copy="Roles inferred from repeated behaviour in this conversation—not fixed personality labels.">The roles you<br />grew into.</WrappedHead>
-      <div className="mt-9 grid gap-8 lg:grid-cols-2">{([0, 1] as const).map((side) => {
+      <WrappedHead eyebrow="Character cards" copy="Roles inferred from repeated behaviour in this conversation—not fixed personality labels.">The roles you grew into.</WrappedHead>
+      <div className="mt-9 grid gap-8 max-[640px]:mt-5 lg:grid-cols-2">{([0, 1] as const).map((side) => {
         const personRoles = side === 0 ? roles.a : roles.b;
-        return <section key={side} className="border-t pt-5" style={{ borderColor: sideVar(side) }}><h3 className="font-display text-[clamp(2.3rem,4vw,4.8rem)]" style={{ color: sideVar(side) }}>{names[side]}</h3><div className="mt-5 space-y-6">{personRoles.map((role, i) => <article key={role.id}><p className="font-mono text-[9px] uppercase tracking-[.16em] text-white/28">Role 0{i + 1}</p><h4 className="mt-1 font-display text-[clamp(1.4rem,2.2vw,2.25rem)] leading-tight text-white/90">{role.title}</h4><p className="mt-2 max-w-[46ch] text-sm leading-relaxed text-white/52">{role.description}</p>{role.evidence[0] && <p className="mt-3 line-clamp-2 border-l border-white/16 pl-3 text-xs italic leading-relaxed text-white/36">“{role.evidence[0].quote}”</p>}</article>)}</div></section>;
+        const currentIndex = Math.min(roleIndexes[side], Math.max(0, personRoles.length - 1));
+        const currentRole = personRoles[currentIndex];
+        return <section key={side} className="border-t pt-5 max-[640px]:pt-3" style={{ borderColor: sideVar(side) }}><h3 className="font-display text-[clamp(2.3rem,4vw,4.8rem)]" style={{ color: sideVar(side) }}>{names[side]}</h3><div className="mt-5 hidden space-y-6 min-[1024px]:block">{personRoles.map(roleCard)}</div>{currentRole && <div className="mt-5 max-[640px]:mt-3 min-[1024px]:hidden"><div key={currentRole.id} className="role-card-swap relative pr-12">{roleCard(currentRole, currentIndex)}{personRoles.length > 1 && <button type="button" onClick={() => moveRole(side, 1)} aria-label={`Show next role for ${names[side]}`} className="absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full border border-white/14 text-base text-white/48 transition hover:border-accent-lit hover:text-accent-lit">→</button>}</div></div>}</section>;
       })}</div>
     </div>
   );
@@ -1852,7 +1864,7 @@ function WildSentenceSlide({ item, names, position, total }: { item: WireWildSen
   }, [open]);
   const side = item.sentence.who;
   return <div>
-    <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Things you actually said · {String(position).padStart(2, "0")} / {String(total).padStart(2, "0")}</p>
+    <p className="flex items-baseline gap-2 font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-1"><span>Things you actually said</span><span className="text-accent-lit/58"><span className="max-[640px]:hidden">· </span>{String(position).padStart(2, "0")} / {String(total).padStart(2, "0")}</span></p>
     <button type="button" onClick={() => setOpen(true)} className="group mt-7 block max-w-[1050px] text-left">
       <h2 className="font-display text-[clamp(2.5rem,7vw,7.6rem)] leading-[.88] tracking-[-.035em] text-white transition group-hover:text-accent-lit">“{item.sentence.body}”</h2>
       <span className="mt-6 inline-flex items-center gap-3 font-mono text-[9px] uppercase tracking-[.16em]" style={{ color: sideVar(side) }}>{names[side]} · {item.category.replaceAll("-", " ")} <span className="text-white/28">context ↗</span></span>
@@ -1865,31 +1877,54 @@ function WildSentenceSlide({ item, names, position, total }: { item: WireWildSen
 function FinaleSlide({
   analysis,
   names,
-  verdict,
   returnHref,
   insightControl,
   shareControl,
+  guestControl,
   onRestart,
 }: {
   analysis: Analysis;
   names: [string, string];
-  verdict?: WirePayload["verdict"];
-  returnHref: string;
+  returnHref: string | null;
   insightControl?: ReactNode;
   shareControl?: ReactNode;
+  guestControl?: ReactNode;
   onRestart: () => void;
 }) {
   const words = analysis.volume.words.a + analysis.volume.words.b;
+  const [headlineIndex, setHeadlineIndex] = useState(0);
+  const [shareLineIndex, setShareLineIndex] = useState(0);
+  useEffect(() => {
+    setHeadlineIndex(Math.floor(Math.random() * 8));
+    setShareLineIndex(Math.floor(Math.random() * 5));
+  }, []);
+  const headlines: ReactNode[] = [
+    <>{num(analysis.volume.total)} messages later, <span className="italic text-accent-lit">they still haven&rsquo;t run out of things to say.</span></>,
+    <>{num(words)} words, countless side quests, and <span className="italic text-accent-lit">somehow they&rsquo;re still not done.</span></>,
+    <>{num(analysis.volume.total)} messages. {num(words)} words. <span className="italic text-accent-lit">Zero signs of shutting up.</span></>,
+    <>Yapping, oversharing, and <span className="italic text-accent-lit">suspiciously fast replies.</span></>,
+    <>{num(analysis.volume.total)} messages later, <span className="italic text-accent-lit">the lore only got worse.</span></>,
+    <>All this talking, and <span className="italic text-accent-lit">still no conclusion.</span></>,
+    <>{names[0]} and {names[1]} came, saw, and <span className="italic text-accent-lit">sent {num(analysis.volume.total)} messages.</span></>,
+    <>Somehow, {num(words)} words only made <span className="italic text-accent-lit">the lore deeper.</span></>,
+  ];
+  const shareLines = [
+    "This deserves to be seen by the other person.",
+    "Send this to your chat partner before they deny everything.",
+    "Too much lore to keep to yourself.",
+    "Go on. Forward the evidence.",
+    "Share it with the co-star of this chaos.",
+  ];
   return (
     <div className={insightControl ? "grid items-center gap-9 lg:grid-cols-[minmax(0,1fr)_390px] lg:gap-14" : "text-center"}>
       <div className={insightControl ? "text-left" : undefined}>
-        <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">The end, for now</p>
-        <h2 className={`mt-5 font-display leading-[.9] tracking-[-.035em] text-white ${insightControl ? "max-w-[760px] text-[clamp(2.5rem,5vw,5.5rem)]" : "mx-auto max-w-[1050px] text-[clamp(2.7rem,6vw,6.8rem)]"}`}>{num(analysis.volume.total)} messages, {num(words)} words—and somehow <span className="italic text-accent-lit">{names[0]} and {names[1]} are still talking.</span></h2>
-        {verdict?.text && <p className={`${insightControl ? "" : "mx-auto"} mt-6 max-w-[620px] text-lg text-white/50`}>The written half called it: “{verdict.text}”</p>}
-        <div className={`flex flex-wrap items-center gap-3 ${insightControl ? "mt-7" : "mt-8 justify-center"}`}>
-          <a href={returnHref} className="inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white">Return to {returnHref === "/app" ? "dashboard" : "home"} <span aria-hidden="true">→</span></a>
+        <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Send the receipts</p>
+        <h2 className={`mt-5 font-display leading-[.9] tracking-[-.035em] text-white ${insightControl ? "max-w-[760px] text-[clamp(2.5rem,5vw,5.25rem)]" : "mx-auto max-w-[1050px] text-[clamp(2.7rem,6vw,6.4rem)]"}`}>{headlines[headlineIndex]}</h2>
+        {guestControl ?? <p className={`${insightControl ? "" : "mx-auto"} mt-8 max-w-[620px] text-[clamp(1.05rem,1.8vw,1.35rem)] font-semibold leading-snug text-white/76`}>{shareLines[shareLineIndex]}</p>}
+        <div className={`flex flex-wrap items-center gap-3 ${insightControl ? "mt-6" : "mt-7 justify-center"}`}>
           {shareControl && <div className="wrapped-finale-actions">{shareControl}</div>}
-          <button type="button" onClick={onRestart} className="inline-flex items-center gap-2 rounded-full border border-white/18 px-6 py-3.5 text-sm font-semibold text-white/62 transition hover:-translate-y-0.5 hover:border-white/45 hover:text-white"><span aria-hidden="true">↺</span> Back to the start</button>
+          <button type="button" onClick={onRestart} className="inline-flex items-center gap-2 rounded-full border border-white/18 px-6 py-3.5 text-sm font-semibold text-white/62 transition hover:-translate-y-0.5 hover:border-white/45 hover:text-white"><span aria-hidden="true">↺</span> Replay</button>
+          {returnHref && <a href={returnHref} className="inline-flex items-center gap-2 px-4 py-3.5 text-sm font-semibold text-white/42 transition hover:text-white">{returnHref === "/app" ? "Dashboard" : "Home"} <span aria-hidden="true">→</span></a>}
         </div>
       </div>
       {insightControl && (
@@ -1911,7 +1946,7 @@ function WrappedScreen({ slide, active, index, total, direction }: { slide: Wrap
       <div className="wrapped-content relative m-auto w-full max-w-[1180px]">{slide.content}</div>
       <div className={`absolute bottom-6 left-5 flex items-baseline gap-3 font-mono uppercase sm:left-10 xl:left-20 ${night ? "text-white" : "text-ink"}`}>
         <span className="text-[9px] tracking-[.14em] opacity-30">{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
-        <span className="text-[clamp(.78rem,1.15vw,1rem)] tracking-[.12em] opacity-60">{slide.label}</span>
+        <span className="text-[clamp(.78rem,1.15vw,1rem)] tracking-[.12em] opacity-60 max-[640px]:hidden">{slide.label}</span>
       </div>
     </section>
   );
@@ -1935,7 +1970,7 @@ function AiProgressSignal({ state }: { state: AiProgressState }) {
             <span className={state.kind === "done" ? "text-safe-lit" : state.kind === "error" ? "text-side-a" : "text-accent-lit"}>{state.kind === "done" ? "AI insights ready" : state.kind === "error" ? "AI reading stopped" : "AI reading in progress"}</span>
             {working && <span className="text-white/38">{state.stage}/{state.total}</span>}
           </div>
-          <p className="mt-0.5 truncate text-[11px] text-white/58">{state.kind === "done" ? "New screens have joined your Wrapped." : state.kind === "error" ? "Return to the AI panel to try again." : state.label}</p>
+          <p className="mt-0.5 truncate text-[11px] text-white/58">{state.kind === "done" ? "New screens have joined your report." : state.kind === "error" ? "Return to the AI panel to try again." : state.label}</p>
         </div>
       </div>
       <span className={`absolute inset-x-0 bottom-0 h-px origin-left transition-[width] duration-700 ${state.kind === "error" ? "bg-side-a" : state.kind === "done" ? "bg-safe-lit" : "bg-accent-lit"}`} style={{ width: `${width}%` }} />
@@ -1949,6 +1984,7 @@ export function Report({
   llm,
   control,
   endControl,
+  guestFinalControl,
   coverActions,
   backHref = "/app",
   visibilityLabel = "Private",
@@ -1964,8 +2000,9 @@ export function Report({
   llm: WirePayload | null;
   control?: ReactNode;
   endControl?: ReactNode;
+  guestFinalControl?: ReactNode;
   coverActions?: ReactNode;
-  backHref?: string;
+  backHref?: string | null;
   visibilityLabel?: string;
   /** Signed-in viewers without an AI reading get a final opt-in on the finale. */
   promptInsightsAtEnd?: boolean;
@@ -2081,7 +2118,7 @@ export function Report({
             <div className="flex justify-end"><span className="hidden font-mono text-[9px] uppercase tracking-[.18em] text-white/30 sm:inline">{visibilityLabel} · read locally</span></div>
             <div className={`mt-[clamp(2.5rem,9vh,6.5rem)] ${control ? "grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_380px] xl:gap-12" : ""}`}>
               <div>
-                <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Your conversation wrapped</p>
+                <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Your conversation report</p>
                 <h1 className={`mt-5 font-display leading-[.78] tracking-[-.045em] text-white ${control ? "text-[clamp(3.6rem,8vw,8.5rem)]" : "text-[clamp(4rem,10vw,10rem)]"}`}>{names[0]} <span className="text-accent-lit">&amp;</span><br /><span className="italic">{names[1]}</span></h1>
                 <p className="mt-7 max-w-[620px] text-lg text-white/48">Everything here was computed from {num(analysis.volume.total)} messages. The raw conversation stays on your machine.</p>
               </div>
@@ -2120,11 +2157,11 @@ export function Report({
     out.push(
       { id: "extremes", label: "the extremes", tone: "light", content: <ExtremesWrappedSlide analysis={analysis} names={names} evidence={visibleExtremeEvidence} /> },
     );
-    if (llm?.roles && (llm.roles.a.length || llm.roles.b.length)) out.push({ id: "characters", label: "AI character cards", tone: "night", content: <CharacterSlide roles={llm.roles} names={names} /> });
+    if (llm?.roles && (llm.roles.a.length || llm.roles.b.length)) out.push({ id: "characters", label: "character cards", tone: "night", content: <CharacterSlide roles={llm.roles} names={names} /> });
     if (endControl) out.push({ id: "save-report", label: "save and share", tone: "night", content: <div className="mx-auto max-w-[900px]">{endControl}</div> });
-    out.push({ id: "finale", label: "the final word", tone: "night", content: <FinaleSlide analysis={analysis} names={names} verdict={llm?.verdict} returnHref={backHref} insightControl={promptInsightsAtEnd && !llm ? control : undefined} shareControl={coverActions} onRestart={restart} /> });
+    out.push({ id: "finale", label: "the final word", tone: "night", content: <FinaleSlide analysis={analysis} names={names} returnHref={backHref} insightControl={promptInsightsAtEnd && !llm ? control : undefined} shareControl={coverActions} guestControl={guestFinalControl} onRestart={restart} /> });
     return out;
-  }, [analysis, backHref, control, coverActions, deck, endControl, llm, names, promptInsightsAtEnd, restart, timeline, visibilityLabel, visibleDoubleTextMessages, visibleExtremeEvidence, visibleStickerVisuals, vocabularyReading, words]);
+  }, [analysis, backHref, control, coverActions, deck, endControl, guestFinalControl, llm, names, promptInsightsAtEnd, restart, timeline, visibilityLabel, visibleDoubleTextMessages, visibleExtremeEvidence, visibleStickerVisuals, vocabularyReading, words]);
 
   const touchStart = useRef<number | null>(null);
   const go = useCallback((next: number) => {
@@ -2148,17 +2185,20 @@ export function Report({
   }, [advance, go, retreat, slides.length]);
 
   const clickAdvance = (event: React.MouseEvent<HTMLElement>) => {
-    if ((event.target as HTMLElement).closest("a,button,input,textarea,select,[role='button']")) return;
+    if ((event.target as HTMLElement).closest("a,button,input,textarea,select,[role='button'],[role='dialog']")) return;
     advance();
   };
 
   return (
-    <main aria-label="Your conversation wrapped" className="relative h-dvh overflow-hidden bg-night" onClick={clickAdvance} onTouchStart={(e) => { touchStart.current = e.touches[0]?.clientX ?? null; }} onTouchEnd={(e) => { if (touchStart.current === null) return; const delta = (e.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current; if (Math.abs(delta) > 45) delta < 0 ? advance() : retreat(); touchStart.current = null; }}>
+    <main aria-label="Your conversation report" className="relative h-dvh overflow-hidden bg-night" onClick={clickAdvance} onTouchStart={(e) => { touchStart.current = e.touches[0]?.clientX ?? null; }} onTouchEnd={(e) => { if (touchStart.current === null) return; const delta = (e.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current; if (Math.abs(delta) > 45) delta < 0 ? advance() : retreat(); touchStart.current = null; }}>
       {slides.map((slide, index) => <WrappedScreen key={slide.id} slide={slide} active={index === current} index={index} total={slides.length} direction={direction} />)}
-      <div className="fixed left-5 top-5 z-40 flex items-center gap-3 sm:left-10">
-        <a href={backHref} className="rounded-full border border-white/14 bg-night/72 px-4 py-2.5 font-mono text-[9px] uppercase tracking-[.16em] text-white/58 backdrop-blur transition hover:border-accent-lit hover:text-white">← {backHref === "/app" ? "Dashboard" : "Home"}</a>
-      </div>
-      {coverActions && <div className="fixed right-5 top-5 z-40 sm:right-10">{coverActions}</div>}
+      {backHref && <div className="fixed left-5 top-5 z-40 flex items-center gap-3 sm:left-10">
+        <a href={backHref} aria-label={backHref === "/app" ? "Back to dashboard" : "Back home"} className="report-back-button inline-flex h-11 items-center gap-2.5 rounded-full border border-white/14 bg-night/72 px-4 font-mono text-[9px] uppercase tracking-[.16em] text-white/58 backdrop-blur transition hover:border-accent-lit hover:text-white">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 fill-none stroke-current" strokeWidth="1.7"><path d="M19 12H5m0 0 5-5m-5 5 5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <span>{backHref === "/app" ? "Dashboard" : "Home"}</span>
+        </a>
+      </div>}
+      {coverActions && <div className={`report-cover-actions fixed right-5 top-5 z-40 sm:right-10 ${slides[current]?.tone === "light" ? "report-actions-light" : ""}`}>{coverActions}</div>}
       {(((externalAiProgress ?? aiProgress) && (externalAiProgress ?? aiProgress)?.kind !== "done") || showInlineCompletion || savedCompletion || externalAiProgress?.kind === "done") && (
         <AiProgressSignal state={showInlineCompletion || savedCompletion || externalAiProgress?.kind === "done" ? { kind: "done" } : (externalAiProgress ?? aiProgress)!} />
       )}

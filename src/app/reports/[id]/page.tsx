@@ -16,7 +16,7 @@ export default async function SavedReportPage({ params, searchParams }: { params
   const query = await searchParams;
   const [saved, profile] = await Promise.all([prisma.report.findFirst({
     where: { id, userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } },
-    select: { analysis: true, llm: true, participantA: true, participantB: true, status: true },
+    select: { analysis: true, llm: true, participantA: true, participantB: true, status: true, sharedMessagesVisible: true },
   }), prisma.user.findUnique({ where: { id: session.user.id }, select: { reportName: true } })]);
   if (!saved?.analysis) notFound();
 
@@ -25,5 +25,5 @@ export default async function SavedReportPage({ params, searchParams }: { params
   if (accountName) analysis.chat.participants = [saved.participantA, accountName];
   const llm = saved.llm ? (saved.llm as unknown as WirePayload) : null;
   const participants: [string, string] = [saved.participantA, accountName || saved.participantB];
-  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} />} backHref="/app" promptInsightsAtEnd localEvidenceKey={id} />;
+  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(llm)} initialIncludeMessages={saved.sharedMessagesVisible} />} backHref="/app" promptInsightsAtEnd localEvidenceKey={id} />;
 }

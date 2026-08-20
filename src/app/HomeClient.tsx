@@ -196,7 +196,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       receive(buffer);
       if (!result) throw new Error("The progress stream ended before the reading finished.");
       setLlm(result);
-      setPhase(keepCreationLoading ? { kind: "working", note: "assembling your Wrapped" } : { kind: "done" });
+      setPhase(keepCreationLoading ? { kind: "working", note: "assembling your report" } : { kind: "done" });
       return result;
     } catch (err) {
       setPhase({ kind: "error", message: err instanceof Error ? err.message : "The reading failed." });
@@ -290,7 +290,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
           await requestLlm(next, true);
         } catch (error) {
           setSaveWarning(error instanceof Error ? `The local report is ready, but AI insights failed: ${error.message}` : "The local report is ready, but AI insights failed.");
-          setPhase({ kind: "working", note: "assembling your Wrapped" });
+          setPhase({ kind: "working", note: "assembling your report" });
         }
       }
       setPrepared(next);
@@ -337,7 +337,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         analysis={loaded.analysis}
         deck={loaded.deck}
         llm={llm}
-        coverActions={loaded.reportId ? <ReportActions reportId={loaded.reportId} /> : undefined}
+        coverActions={loaded.reportId ? <ReportActions reportId={loaded.reportId} canConfigureMessages={Boolean(llm)} /> : undefined}
         backHref={viewer ? "/app" : "/"}
         promptInsightsAtEnd={Boolean(viewer)}
         doubleTextMessages={loaded.doubleTextMessages}
@@ -346,6 +346,7 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         stickerVisuals={loaded.stickerVisuals}
         aiProgress={aiProgress}
         endControl={!viewer ? <GuestEndPrompt analysis={loaded.analysis} /> : undefined}
+        guestFinalControl={!viewer ? <GuestFinalPrompt analysis={loaded.analysis} /> : undefined}
         control={
           llm ? undefined : viewer ? (
             <ReadingControl phase={phase} onRun={runLlm} />
@@ -438,10 +439,10 @@ function ParticipantModal({
         <h2 id="participant-title" className="font-display text-[38px] leading-tight sm:text-[46px]">Who is in this conversation?</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink/55">{accountName ? "Choose how your conversation partner appears. Your name comes from Settings." : "Use the names you want displayed throughout the report. This does not change your export."}</p>
         <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <label className="text-xs font-medium text-ink/55">Conversation partner<input autoFocus value={first} onChange={(event) => setFirst(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>
-          {accountName ? <div className="text-xs font-medium text-ink/55">You<div className="mt-2 w-full border-b border-ink/10 py-3 font-display text-2xl text-ink/48">{second}</div></div> : <label className="text-xs font-medium text-ink/55">You<input value={second} onChange={(event) => setSecond(event.target.value)} maxLength={60} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /></label>}
+          <label className="text-xs font-medium text-ink/55">Conversation partner<input autoFocus value={first} onChange={(event) => setFirst(event.target.value)} maxLength={20} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /><span aria-live="polite" className="mt-2 block text-right font-mono text-[9px] uppercase tracking-[.1em] text-ink/38">{Math.max(0, 20 - first.length)} characters left</span></label>
+          {accountName ? <div className="text-xs font-medium text-ink/55">You<div className="mt-2 w-full border-b border-ink/10 py-3 font-display text-2xl text-ink/48">{second}</div></div> : <label className="text-xs font-medium text-ink/55">You<input value={second} onChange={(event) => setSecond(event.target.value)} maxLength={20} className="mt-2 w-full border-b border-ink/20 bg-transparent py-3 font-display text-2xl text-ink outline-none transition focus:border-accent" /><span aria-live="polite" className="mt-2 block text-right font-mono text-[9px] uppercase tracking-[.1em] text-ink/38">{Math.max(0, 20 - second.length)} characters left</span></label>}
         </div>
-        <label className={`mt-7 flex items-start gap-3 border-y border-ink/12 py-4 ${canUseAi ? "cursor-pointer" : "opacity-45"}`}><input type="checkbox" checked={withAi} disabled={!canUseAi} onChange={(event) => setWithAi(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-semibold">Generate AI insights now</span><span className="mt-1 block text-xs leading-relaxed text-ink/50">Named eras, recurring lore, wild sentences and the roles you grew into.{!canUseAi ? " Sign in to enable this." : " Your Wrapped opens when the complete reading is ready."}</span></span></label>
+        <label className={`mt-7 flex items-start gap-3 border-y border-ink/12 py-4 ${canUseAi ? "cursor-pointer" : "opacity-45"}`}><input type="checkbox" checked={withAi} disabled={!canUseAi} onChange={(event) => setWithAi(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-semibold">Generate AI insights now</span><span className="mt-1 block text-xs leading-relaxed text-ink/50">Named eras, recurring lore, wild sentences and the roles you grew into.{!canUseAi ? " Sign in to enable this." : " Your report opens when the complete reading is ready."}</span></span></label>
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-ink/12 pt-5"><div className="flex items-center gap-4"><button type="button" onClick={onBack} className="text-sm text-ink/45 transition hover:text-ink">← Back</button><button type="button" onClick={onChooseAnother} className="text-sm text-accent transition hover:text-ink">Choose another file</button></div><button type="submit" disabled={!valid} className="rounded-full bg-night px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-35">Create the report</button></div>
       </form>
     </div>
@@ -490,7 +491,7 @@ function WorkspaceUpload({
             onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={(event) => { event.preventDefault(); setDragging(false); void filesFromDrop(event.dataTransfer).then((files) => { if (files.length) void onFiles(files); }); }}
-            className={`group relative flex min-h-[310px] cursor-pointer flex-col justify-between overflow-hidden rounded-[26px] border-2 bg-night p-7 text-white transition duration-300 sm:min-h-[390px] sm:p-10 ${dragging ? "scale-[1.01] border-accent-lit" : "border-night hover:border-accent-lit"}`}
+            className={`analysis-export-dropzone group relative flex min-h-[310px] cursor-pointer flex-col justify-between overflow-hidden rounded-[26px] border-2 bg-night p-7 text-white transition duration-300 sm:min-h-[390px] sm:p-10 ${dragging ? "scale-[1.01] border-accent-lit" : "border-night hover:border-accent-lit"}`}
           >
             <input ref={inputRef} type="file" {...folderInputProps} className="sr-only" onChange={(event) => { const files = [...(event.target.files ?? [])]; if (files.length) void onFiles(files); }} />
             <div className="flex items-center justify-between">
@@ -592,7 +593,7 @@ function LocalLoadingModal({ phase, reportReady, onView }: { phase: Phase; repor
   }, [stage]);
 
   if (!active) return null;
-  const display = stage === "phrases" ? LOCAL_LOADING_LINES[line] : stage === "receipts" ? "Preparing the receipts..." : "Your Wrapped is ready.";
+  const display = stage === "phrases" ? LOCAL_LOADING_LINES[line] : stage === "receipts" ? "Preparing the receipts..." : "Your report is ready.";
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-night/72 px-5 py-8 backdrop-blur-md" role="status">
       <span className="sr-only">Creating your report.</span>
@@ -601,7 +602,7 @@ function LocalLoadingModal({ phase, reportReady, onView }: { phase: Phase; repor
         <div className="relative my-auto py-9">
           <div className="mb-6 flex items-center gap-4"><span className={`${stage === "phrases" ? "loading-orbit" : ""} grid h-11 w-11 place-items-center rounded-full border border-accent-lit/45 text-accent-lit`}>{stage === "ready" ? "✓" : "◎"}</span><Kicker tone="lit">{stage === "phrases" ? "Looking closer" : stage === "receipts" ? "One last thing" : "Finished"}</Kicker></div>
           <p key={`${stage}-${line}`} aria-hidden="true" className={`${stage === "phrases" && line === 0 ? "" : "loading-copy-enter"} max-w-[15ch] font-display text-[clamp(2.8rem,6vw,5.2rem)] leading-[0.9] tracking-[-0.025em] text-white`}>{display}</p>
-          {stage === "ready" && <button type="button" onClick={onView} className="mt-8 inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition duration-300 hover:-translate-y-1 hover:bg-white">View your Wrapped <span aria-hidden="true">→</span></button>}
+          {stage === "ready" && <button type="button" onClick={onView} className="mt-8 inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition duration-300 hover:-translate-y-1 hover:bg-white">View your report <span aria-hidden="true">→</span></button>}
         </div>
         <footer className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/12 pt-5"><p className="max-w-[48ch] text-xs leading-relaxed text-white/42">Counted in this tab. The raw conversation stays on your machine.</p><span className="font-mono text-[8px] uppercase tracking-[0.16em] text-accent-lit">{stage === "ready" ? "Complete" : phase.note}</span></footer>
       </div>
@@ -620,18 +621,22 @@ function rememberForSignup(analysis: Analysis) {
 
 function GuestEndPrompt({ analysis }: { analysis: Analysis }) {
   return (
-    <div className="max-w-[760px]">
-      <Kicker tone="lit" className="mb-5">Keep the report</Kicker>
-      <h2 className="font-display text-[44px] leading-[0.95] text-white sm:text-[68px]">Save it. Share it.<br /><span className="italic text-accent-lit">Come back to it.</span></h2>
-      <p className="mt-6 max-w-[54ch] text-base leading-relaxed text-white/60">Log in or create an account to add this report to your dashboard and generate a shareable link. It will be saved automatically as soon as Google brings you back.</p>
-      <Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-8 inline-flex rounded-full bg-accent-lit px-6 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:brightness-110">Log in or sign up to save <span className="ml-3">→</span></Link>
+    <div className="max-w-[980px]">
+      <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Keep the report</p>
+      <h2 className="mt-5 font-display text-[clamp(3.4rem,8vw,8rem)] leading-[.86] tracking-[-.035em] text-white">Save it. Share it.<br /><span className="italic text-accent-lit">Come back to it.</span></h2>
+      <p className="mt-7 max-w-[58ch] text-lg leading-relaxed text-white/60">Log in or create an account to add this report to your dashboard and generate a shareable link. It will be saved automatically as soon as Google brings you back.</p>
+      <Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-8 inline-flex rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:brightness-110">Log in or sign up to save <span className="ml-3">→</span></Link>
     </div>
   );
 }
 
+function GuestFinalPrompt({ analysis }: { analysis: Analysis }) {
+  return <div className="mt-8"><p className="mx-auto max-w-[720px] text-[clamp(1.1rem,2vw,1.5rem)] font-semibold leading-snug text-white/76">Log in or sign up to share this with the co-star of this chaos.</p><Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white">Log in or sign up <span aria-hidden="true">→</span></Link></div>;
+}
+
 function AccountGate({ signedIn, analysis }: { signedIn: boolean; analysis: Analysis }) {
   return (
-    <NightPanel>
+    <NightPanel className="ai-insights-panel border border-accent-lit/45 shadow-[inset_0_0_0_1px_rgba(42,171,238,.06)]">
       <Kicker tone="lit" className="mb-3.5">Powered by AI</Kicker>
       <p className="font-display text-[23px] leading-snug text-white">
         {signedIn ? "Unlock what the numbers cannot name." : "Unlock new insights hidden in the conversation."}
@@ -707,7 +712,7 @@ function ReadingControl({ phase, onRun }: { phase: Phase; onRun: () => void }) {
   }
 
   return (
-    <NightPanel>
+    <NightPanel className="ai-insights-panel border border-accent-lit/45 shadow-[inset_0_0_0_1px_rgba(42,171,238,.06)]">
       <Kicker tone="lit" className="mb-3.5">Powered by AI</Kicker>
       <p className="font-display text-[23px] leading-snug text-white">
         Unlock what the numbers cannot name.
@@ -732,102 +737,58 @@ function ReadingControl({ phase, onRun }: { phase: Phase; onRun: () => void }) {
 
 // ---------------------------------------------------------------- the landing
 
-/**
- * What the report actually contains, described rather than illustrated.
- *
- * Each entry is a real card `buildDeck` can produce, which is why the list is
- * this length and no longer: there is no tile here for an instrument that
- * doesn't exist.
- */
-const INSTRUMENTS = [
-  {
-    title: "When you talk",
-    body: "Twenty-four hourly buckets, per person. Whose messages are the ones after midnight.",
-  },
-  {
-    title: "Who keeps going",
-    body: "Unbroken runs — messages sent before the other one says anything back — measured both ways.",
-  },
-  {
-    title: "Eras",
-    body: "The history cut where the rate of conversation actually changed, not by calendar year. The silences are chapters too.",
-  },
-  {
-    title: "Words that are yours",
-    body: "Not most-used — most characteristic. Log-odds against the other person, so “the” and “you” don't win.",
-  },
-  {
-    title: "Reply latency",
-    body: "Median, in-session, 75th and 90th percentile. Four cuts, because one median hides a lot.",
-  },
-  {
-    title: "Who comes back",
-    body: "After every silence, who broke it. Shown at four different cutoffs — a pattern that only appears at one is a pattern in the cutoff.",
-  },
-  {
-    title: "The verdict",
-    body: "One sentence about the dynamic, chosen from candidates by a separate judging pass, with the quotes it rests on.",
-  },
-  {
-    title: "What came out even",
-    body: "The measurements that showed no difference, stated plainly. A report that only shows you the hits is lying by omission.",
-  },
-];
-
-const RESULT_PREVIEW_ROWS = [
-  { value: "41 days", label: "the longest silence", detail: "then one of you came back at 02:14", tone: "text-side-a" },
-  { value: "“sooo?”", label: "language only you two use", detail: "312 times · absent from the first year", tone: "text-accent-lit italic" },
-  { value: "23:40", label: "when you actually talk", detail: "the hour holding a third of everything", tone: "text-white" },
-  { value: "62%", label: "who restarts the chat", detail: "measured after meaningful silence", tone: "text-safe-lit" },
-  { value: "17 texts", label: "the longest uninterrupted run", detail: "before the other person replied", tone: "text-warn" },
+const REPORT_MOMENTS = [
+  { eyebrow: "Rhythm", title: "When you actually talk", value: "23:40", detail: "The hour holding a third of everything.", note: "Activity · by hour", tone: "text-white", bars: [18, 12, 8, 6, 5, 7, 11, 16, 24, 31, 38, 44, 35, 28, 32, 39, 48, 61, 73, 82, 91, 100, 72, 46] },
+  { eyebrow: "Silence", title: "The gap that became a chapter", value: "41 days", detail: "Then one of you came back at 02:14.", note: "Longest silence · all time", tone: "text-side-a", bars: [84, 72, 64, 52, 30, 10, 4, 3, 3, 4, 8, 22, 48, 76, 92, 68, 54, 61, 80, 72, 58, 44, 61, 78] },
+  { eyebrow: "Private language", title: "The phrase that became yours", value: "“sooo?”", detail: "312 appearances. Nowhere in the first year.", note: "Distinctive language · log-odds", tone: "text-accent-lit italic", bars: [4, 7, 12, 17, 25, 31, 36, 43, 48, 55, 63, 72, 78, 87, 96, 84, 91, 77, 88, 94, 82, 98, 91, 100] },
+  { eyebrow: "Return pattern", title: "Who restarts the conversation", value: "62%", detail: "Measured after meaningful silence, not overnight gaps.", note: "Re-entry · 24h threshold", tone: "text-safe-lit", bars: [63, 42, 71, 53, 80, 61, 72, 48, 66, 57, 85, 63, 76, 55, 69, 82, 61, 73, 58, 78, 65, 84, 70, 88] },
+  { eyebrow: "The receipts", title: "The longest uninterrupted run", value: "17 texts", detail: "Sent before the other person replied.", note: "Monologue streak · with context", tone: "text-warn", bars: [8, 13, 18, 24, 29, 37, 45, 52, 61, 70, 79, 88, 100, 91, 83, 74, 62, 50, 43, 35, 27, 21, 16, 12] },
+  { eyebrow: "AI reading", title: "The roles you grew into", value: "Archivist × Instigator", detail: "A written reading whose claims link back to the messages.", note: "Opt-in · evidence checked", tone: "text-accent-lit", bars: [42, 48, 45, 58, 54, 67, 62, 73, 70, 81, 77, 89, 85, 94, 88, 96, 91, 84, 78, 86, 74, 69, 61, 55] },
 ] as const;
 
-function ResultPreview() {
+function ReportShowcase() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % RESULT_PREVIEW_ROWS.length), 3600);
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % REPORT_MOMENTS.length), 4200);
     return () => window.clearInterval(timer);
   }, [paused, active]);
 
-  const row = RESULT_PREVIEW_ROWS[active];
+  const moment = REPORT_MOMENTS[active];
 
   return (
-    <div
-      aria-label="Example report preview"
+    <section
+      aria-label="What comes back in a Telescope report"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
       }}
+      className="starfield relative overflow-hidden bg-night px-5 py-20 text-white sm:px-10 sm:py-28 xl:px-16 2xl:px-24"
     >
-      <div className="mb-3 flex items-center justify-between px-1 font-mono text-[9px] uppercase tracking-[0.2em] text-white/32">
-        <span>What comes back</span><span>{String(active + 1).padStart(2, "0")} / {String(RESULT_PREVIEW_ROWS.length).padStart(2, "0")}</span>
-      </div>
-      <div className="relative overflow-hidden border-y border-white/16 bg-white/[0.025] px-5 py-6 sm:px-7">
-        <div key={row.label} className="result-stat-enter min-h-[132px]">
-          <p className={`font-display text-[52px] leading-[0.9] sm:text-[64px] ${row.tone}`}>{row.value}</p>
-          <p className="mt-4 text-[15px] font-semibold text-white/90">{row.label}</p>
-          <p className="mt-1 text-xs text-white/38">{row.detail}</p>
+      <div className="relative mx-auto max-w-[1500px]">
+        <header className="mb-12 grid gap-5 border-b border-white/14 pb-9 lg:grid-cols-[1fr_1fr] lg:items-end">
+          <div><Kicker tone="lit" className="mb-4">What comes back</Kicker><h2 className="max-w-[760px] font-display text-[clamp(3.4rem,7vw,7.4rem)] leading-[.84] tracking-[-.035em]">One conversation.<br /><span className="italic text-accent-lit">Six ways back in.</span></h2></div>
+          <p className="max-w-[48ch] text-base leading-relaxed text-white/54 lg:justify-self-end lg:text-lg">Telescope turns the whole history into a report you can move through—not a dashboard dump. Watch the instruments rotate, or choose one yourself.</p>
+        </header>
+        <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[310px_minmax(0,1fr)]">
+          <div className="border-t border-white/14">
+            {REPORT_MOMENTS.map((item, index) => <button key={item.eyebrow} type="button" aria-pressed={index === active} onClick={() => setActive(index)} className={`group grid w-full grid-cols-[30px_1fr] gap-3 border-b py-4 text-left transition ${index === active ? "border-accent-lit text-white" : "border-white/10 text-white/38 hover:border-white/25 hover:text-white/72"}`}><span className={`font-mono text-[9px] ${index === active ? "text-accent-lit" : "text-white/24"}`}>{String(index + 1).padStart(2, "0")}</span><span><span className="block text-sm font-semibold">{item.eyebrow}</span>{index === active && <span className="mt-1 block text-[11px] text-white/36">{item.title}</span>}</span></button>)}
+          </div>
+          <div className="relative min-h-[460px] overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] p-6 sm:p-9 lg:min-h-[540px] lg:p-12">
+            <div key={moment.eyebrow} className="result-stat-enter flex h-full min-h-[400px] flex-col">
+              <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>{moment.note}</span><span>{String(active + 1).padStart(2, "0")} / {String(REPORT_MOMENTS.length).padStart(2, "0")}</span></div>
+              <div className="my-auto py-10"><p className="font-mono text-[10px] uppercase tracking-[.18em] text-accent-lit">{moment.title}</p><p className={`mt-5 max-w-[12ch] font-display text-[clamp(4rem,9vw,9rem)] leading-[.78] tracking-[-.045em] ${moment.tone}`}>{moment.value}</p><p className="mt-7 max-w-[46ch] text-sm leading-relaxed text-white/48 sm:text-base">{moment.detail}</p></div>
+              <div className="flex h-24 items-end gap-[3px] border-b border-white/12" aria-hidden="true">{moment.bars.map((height, index) => <span key={index} className={`block min-w-0 flex-1 rounded-t-sm ${index % 3 === 0 ? "bg-accent-lit/70" : "bg-white/14"}`} style={{ height: `${height}%` }} />)}</div>
+            </div>
+            {!paused && <span key={`showcase-progress-${active}`} className="result-showcase-progress absolute bottom-0 left-0 h-[2px] bg-accent-lit" />}
+          </div>
         </div>
-        {!paused && <span key={`progress-${active}`} className="result-stat-progress absolute bottom-0 left-0 h-px bg-accent-lit" />}
       </div>
-      <div className="mt-3 grid grid-cols-5 gap-1.5" aria-label="Choose an example finding">
-        {RESULT_PREVIEW_ROWS.map((item, index) => (
-          <button
-            key={item.label}
-            type="button"
-            aria-label={item.label}
-            aria-pressed={index === active}
-            onClick={() => setActive(index)}
-            className={`h-1 rounded-full transition-colors ${index === active ? "bg-accent-lit" : "bg-white/16 hover:bg-white/35"}`}
-          />
-        ))}
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -933,30 +894,11 @@ function Landing({
             <p className="mt-4 text-sm leading-relaxed text-side-a">{phase.message}</p>
           )}
           </div>
-          <ResultPreview />
           </div>
-        </div>
+          </div>
       </section>
 
-      {/* instruments */}
-      <section className="px-5 py-20 sm:px-10 sm:py-28 xl:px-16 2xl:px-24">
-        <div className="grid gap-14 lg:grid-cols-[minmax(240px,.65fr)_1.35fr]">
-          <div className="lg:sticky lg:top-12 lg:self-start">
-            <Kicker className="mb-4">What comes back</Kicker>
-            <h2 className="max-w-[420px] font-display text-[42px] leading-[0.98] text-ink sm:text-[58px]">Not a summary.<br /><span className="italic text-accent">A point of view.</span></h2>
-            <p className="mt-6 max-w-[36ch] text-[15px] leading-relaxed text-ink/58">Eight instruments measure the same conversation from different angles. Only real differences earn space in the report.</p>
-          </div>
-          <ol className="border-t border-ink/18">
-            {INSTRUMENTS.map((ins, i) => (
-              <li key={ins.title} className="group grid gap-3 border-b border-ink/18 py-6 transition-colors hover:border-accent sm:grid-cols-[52px_minmax(160px,.65fr)_1fr] sm:items-baseline">
-                <span className="font-mono text-[10px] text-ink/35">{String(i + 1).padStart(2, "0")}</span>
-                <h3 className="font-display text-[25px] leading-tight text-ink transition-transform duration-300 group-hover:translate-x-1 group-hover:text-accent">{ins.title}</h3>
-                <p className="max-w-[56ch] text-[13.5px] leading-relaxed text-ink/58">{ins.body}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
+      <div id="what-comes-back" className="scroll-mt-0"><ReportShowcase /></div>
 
       {/* privacy */}
       <section className="starfield relative overflow-hidden bg-night px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
@@ -966,12 +908,12 @@ function Landing({
               The only promise that matters
             </Kicker>
             <h2 className="font-display text-[40px] leading-[1.02] text-white sm:text-[52px]">
-              Your chat never leaves your computer.
+              Local first. AI only when you ask.
             </h2>
             <p className="mt-5 max-w-[440px] text-[17px] leading-relaxed text-white/66">
-              Not &ldquo;encrypted in transit&rdquo;. Not &ldquo;deleted after 30 days&rdquo;. The file
-              you drop in is read by the page you&rsquo;re looking at, on the machine you&rsquo;re
-              sitting at. Every number in the report is arithmetic done in this tab.
+              The numerical report is built by the page you&rsquo;re looking at, on the machine
+              you&rsquo;re using. AI insights are a separate, explicit choice—and shared links let
+              you decide whether message evidence stays hidden.
             </p>
           </div>
           <ol className="flex flex-col gap-px overflow-hidden rounded-xl border border-white/16">
@@ -1085,9 +1027,9 @@ function Landing({
               <Kicker tone="faint-lit" className="mb-1">
                 Fine print
               </Kicker>
-              <span>No accounts, no storage</span>
-              <span>The written half is opt-in</span>
-              <span>1:1 chats, English</span>
+              <span>Local analysis works without an account</span>
+              <span>AI reading and message sharing are opt-in</span>
+              <span>Saved reports stay in your account</span>
             </div>
           </div>
           <div className="flex flex-wrap justify-between gap-3 pt-5 font-mono text-[11px] tracking-wider text-white/40">

@@ -9,11 +9,11 @@ export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in to view reports." }, { status: 401 });
   const [reports, collections] = await Promise.all([
-    prisma.report.findMany({ where: { userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } }, orderBy: { createdAt: "desc" }, select: { id: true, participantA: true, participantB: true, createdAt: true, completedAt: true, firstTs: true, lastTs: true, messageCount: true, status: true, hasAiInsights: true, shareToken: true, collections: { select: { collectionId: true } } } }),
+    prisma.report.findMany({ where: { userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } }, orderBy: { createdAt: "desc" }, select: { id: true, participantA: true, participantB: true, createdAt: true, completedAt: true, firstTs: true, lastTs: true, messageCount: true, status: true, hasAiInsights: true, shareToken: true, shareMessagesToken: true, collections: { select: { collectionId: true } } } }),
     prisma.collection.findMany({ where: { userId: session.user.id }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, _count: { select: { reports: true } } } }),
   ]);
   return NextResponse.json({
-    reports: reports.map((report) => ({ id: report.id, participantA: report.participantA, participantB: report.participantB, createdAt: report.createdAt.toISOString(), completedAt: report.completedAt?.toISOString() ?? null, firstTs: report.firstTs, lastTs: report.lastTs, messageCount: report.messageCount, status: report.status, aiReady: report.hasAiInsights, shared: Boolean(report.shareToken), collectionIds: report.collections.map((membership) => membership.collectionId) })),
+    reports: reports.map((report) => ({ id: report.id, participantA: report.participantA, participantB: report.participantB, createdAt: report.createdAt.toISOString(), completedAt: report.completedAt?.toISOString() ?? null, firstTs: report.firstTs, lastTs: report.lastTs, messageCount: report.messageCount, status: report.status, aiReady: report.hasAiInsights, shared: Boolean(report.shareToken || report.shareMessagesToken), sharedInsights: Boolean(report.shareToken), sharedMessages: Boolean(report.shareMessagesToken), collectionIds: report.collections.map((membership) => membership.collectionId) })),
     collections: collections.map((collection) => ({ id: collection.id, name: collection.name, count: collection._count.reports })),
   });
 }
@@ -25,7 +25,7 @@ function looksLikeAnalysis(value: unknown): value is Analysis {
     candidate.chat &&
     Array.isArray(candidate.chat.participants) &&
     candidate.chat.participants.length === 2 &&
-    candidate.chat.participants.every((name) => typeof name === "string") &&
+    candidate.chat.participants.every((name) => typeof name === "string" && name.trim().length > 0 && name.trim().length <= 20) &&
     candidate.span &&
     Number.isFinite(candidate.span.firstTs) &&
     Number.isFinite(candidate.span.lastTs),

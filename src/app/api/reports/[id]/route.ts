@@ -11,8 +11,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in to edit reports." }, { status: 401 });
   const { id } = await params;
   const body = await request.json().catch(() => null) as { participantA?: unknown; participantB?: unknown } | null;
-  const participantA = typeof body?.participantA === "string" ? body.participantA.trim().slice(0, 80) : "";
-  const participantB = typeof body?.participantB === "string" ? body.participantB.trim().slice(0, 80) : "";
+  const participantA = typeof body?.participantA === "string" ? body.participantA.trim().slice(0, 20) : "";
+  const participantB = typeof body?.participantB === "string" ? body.participantB.trim().slice(0, 20) : "";
   if (!participantA || !participantB) return NextResponse.json({ error: "Both names are required." }, { status: 400 });
   const report = await prisma.report.findFirst({ where: { id, userId: session.user.id }, select: { analysis: true } });
   if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });

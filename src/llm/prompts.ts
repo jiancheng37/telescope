@@ -6,7 +6,7 @@ import type { Corpus } from "./corpus";
 
 export function readingSystem(corpus: Corpus): string {
   const [A, B] = corpus.labels;
-  return `You are reading representative excerpts from one Telegram conversation between two people, ${A} and ${B}, and writing the interpretive half of a "wrapped" for it.
+  return `You are reading representative excerpts from one Telegram conversation between two people, ${A} and ${B}, and writing the interpretive half of a report for it.
 
 A deterministic pass has already counted the complete conversation. Those numbers are in the brief and they are correct. Do not recount, recompute, estimate, or contradict them. The transcript below is a bounded, timeline-balanced sample selected from the full chat. Use it to interpret and cite examples, but do not claim an observed phrase or topic is exhaustive merely because it appears often in the sample.
 
@@ -58,7 +58,7 @@ Plain, specific, unhurried, a little dry. Short sentences. No exclamation marks,
 
 export function candidateSystem(corpus: Corpus, maxChars: number): string {
   const [A] = corpus.labels;
-  return `You are writing the one line that goes on the shareable card at the end of a "wrapped" for a two-person conversation.
+  return `You are writing the one line that goes on the shareable card at the end of a report for a two-person conversation.
 
 It is a verdict on the *dynamic between them* — the shape of how these two people talk to each other — compressed to roughly ${maxChars} characters. That budget comes from the typography, not from a word count; ${maxChars} characters is about six to eight words. Under is better than over.
 
@@ -85,7 +85,7 @@ Do not write a verdict that turns on: a breakup or a romantic rejection, a death
 }
 
 export function judgeSystem(maxChars: number): string {
-  return `You are judging candidate lines for the shareable card at the end of a "wrapped" for a two-person conversation. You did not write them. Your job is to find what is wrong with each one.
+  return `You are judging candidate lines for the shareable card at the end of a report for a two-person conversation. You did not write them. Your job is to find what is wrong with each one.
 
 For each candidate, answer each check honestly. On every check, \`true\` means the candidate **fails** that check:
 

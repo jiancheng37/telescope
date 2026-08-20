@@ -35,9 +35,12 @@ export const metadata: Metadata = {
   description: "What a year of one conversation actually looked like.",
 };
 
+const themeScript = `try{const p=JSON.parse(localStorage.getItem("telescope:preferences")||"{}");document.documentElement.classList.toggle("telescope-dashboard-dark",p.dashboardDark!==false)}catch{document.documentElement.classList.add("telescope-dashboard-dark")}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
+      <head><script id="telescope-theme" dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>{children}</body>
     </html>
   );

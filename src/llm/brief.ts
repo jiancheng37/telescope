@@ -65,7 +65,7 @@ export function buildBrief(analysis: Analysis, corpus: Corpus): string {
     finding(
       "concentration",
       "Bursts.",
-      `${analysis.sessionSummary.count} bursts of conversation (a burst ends after 45 min of quiet); ` +
+      `${analysis.sessionSummary.count} bursts of conversation (a burst ends after two hours of quiet); ` +
         `median ${analysis.sessionSummary.medianMessages.toFixed(0)} messages long` +
         (top10
           ? `. The busiest ${top10.n} bursts hold ${pct(top10.share)} of everything ever said.`

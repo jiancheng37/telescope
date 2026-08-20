@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       const wrapped = raw as { export: unknown; participants?: unknown };
       raw = wrapped.export;
       if (Array.isArray(wrapped.participants) && wrapped.participants.length === 2 && wrapped.participants.every((name) => typeof name === "string" && name.trim())) {
-        participantNames = [wrapped.participants[0].trim(), wrapped.participants[1].trim()];
+        participantNames = [wrapped.participants[0].trim().slice(0, 20), wrapped.participants[1].trim().slice(0, 20)];
       }
     }
   } catch {

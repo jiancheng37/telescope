@@ -1,6 +1,7 @@
 export interface SettingsData {
   account: { name: string; reportName: string; email: string; image: string | null };
-  shares: Array<{ id: string; names: string; path: string; createdAt: string }>;
+  shares: Array<{ id: string; names: string; path: string; createdAt: string; privacy?: string }>;
+  collections: Array<{ id: string; name: string; count: number }>;
 }
 
 let cache: SettingsData | null = null;

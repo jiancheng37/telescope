@@ -6,7 +6,7 @@ export async function PATCH(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in to update your account." }, { status: 401 });
   const body = await request.json().catch(() => null) as { reportName?: unknown } | null;
-  const reportName = typeof body?.reportName === "string" ? body.reportName.trim().replace(/\s+/g, " ").slice(0, 80) : "";
+  const reportName = typeof body?.reportName === "string" ? body.reportName.trim().replace(/\s+/g, " ").slice(0, 20) : "";
   if (!reportName) return NextResponse.json({ error: "Report name is required." }, { status: 400 });
   await prisma.user.update({ where: { id: session.user.id }, data: { reportName } });
   return NextResponse.json({ reportName });

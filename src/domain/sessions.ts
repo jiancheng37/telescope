@@ -2,7 +2,7 @@ import { mean, median } from "./stats";
 import type { Chapter, Episode, EraChange, EraChangeChannel, Message, Session, Side } from "./types";
 
 /** A silence this long ends a session. Bursts, not days. */
-export const SESSION_GAP_MIN = 45;
+export const SESSION_GAP_MIN = 120;
 /** A silence this long ends an episode of contact. */
 export const EPISODE_GAP_DAYS = 14;
 /** A silence this long is a chapter in its own right, not a gap inside one. */

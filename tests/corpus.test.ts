@@ -8,6 +8,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseExport } from "../src/domain/parse";
+import { SESSION_GAP_MIN } from "../src/domain/sessions";
 import { buildCorpus, shortLabels } from "../src/llm/corpus";
 import { at, call, DAY, makeExport, msg, resetIds, T0 } from "./fixture";
 
@@ -179,10 +180,11 @@ describe("buildCorpus structure markers", () => {
   });
 
   it("starts a new session after the gap threshold and not before", () => {
+    const gap = SESSION_GAP_MIN * 60;
     const c = corpusOf([
       msg({ at: T0, from: "alice", text: "a" }),
-      msg({ at: T0 + 44 * 60, from: "bob", text: "b" }),
-      msg({ at: T0 + 44 * 60 + 46 * 60, from: "alice", text: "c" }),
+      msg({ at: T0 + gap - 60, from: "bob", text: "b" }),
+      msg({ at: T0 + gap * 2, from: "alice", text: "c" }),
     ]);
     expect(c.text.match(/^== /gm)).toHaveLength(2);
   });

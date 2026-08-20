@@ -131,7 +131,7 @@ export function SavedReportReadingControl({
 
   return (
     <>
-      <NightPanel>
+      <NightPanel className="ai-insights-panel border border-accent-lit/45 shadow-[inset_0_0_0_1px_rgba(42,171,238,.06)]">
         <Kicker tone="lit" className="mb-3.5">Powered by AI</Kicker>
         <p className="font-display text-[24px] leading-[1.05] text-white">Unlock what the numbers cannot name.</p>
         <p className="mt-3 text-sm leading-relaxed text-white/58">Get new insights into the patterns running through this conversation.</p>
