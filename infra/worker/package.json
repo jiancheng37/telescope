@@ -1,0 +1,19 @@
+{
+  "name": "telescope-analysis-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "worker": "tsx scripts/analysis-worker.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1114.0",
+    "@aws-sdk/client-sqs": "^3.1114.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "openai": "^7.4.0",
+    "pg": "^8.23.0",
+    "tsx": "^4.23.12",
+    "zod": "^4.4.3"
+  }
+}
