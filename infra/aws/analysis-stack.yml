@@ -114,6 +114,7 @@ Resources:
                 Resource:
                   - !GetAtt WorkerExecutionRole.Arn
                   - !GetAtt WorkerTaskRole.Arn
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/telescope-analysis-github-deployer"
               - Effect: Allow
                 Action:
                   - ec2:DescribeSecurityGroups
