@@ -6,6 +6,10 @@ ENV NODE_ENV=production
 # the image build. ECS supplies the real secret at runtime.
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 COPY prisma.config.ts tsconfig.json ./
 COPY prisma ./prisma
