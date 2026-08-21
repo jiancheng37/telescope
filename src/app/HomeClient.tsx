@@ -509,14 +509,14 @@ function ExportGuideModal({ onClose }: { onClose: () => void }) {
     ["05", "Choose the export folder", "Choose the complete folder Telegram created—do not select an individual file inside it. Telescope includes any available sticker artwork automatically."],
   ];
   return (
-    <div onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-night/78 px-5 py-8 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="export-guide-title">
-      <section className="rise w-full max-w-[760px] overflow-hidden rounded-[26px] bg-surface text-ink shadow-2xl">
-        <header className="flex items-start justify-between gap-6 border-b border-ink/12 px-6 py-6 sm:px-9 sm:py-8">
+    <div onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }} className="fixed inset-0 z-50 grid h-dvh place-items-center overflow-hidden bg-night/78 p-4 backdrop-blur-md sm:px-5 sm:py-8" role="dialog" aria-modal="true" aria-labelledby="export-guide-title">
+      <section className="rise flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col overflow-hidden rounded-[26px] bg-surface text-ink shadow-2xl sm:max-h-[calc(100dvh-4rem)]">
+        <header className="flex shrink-0 items-start justify-between gap-6 border-b border-ink/12 px-6 py-6 sm:px-9 sm:py-8">
           <div><Kicker>Telegram export guide</Kicker><h2 id="export-guide-title" className="mt-3 font-display text-[clamp(2.2rem,5vw,3.8rem)] leading-[.95]">Export the complete chat folder.</h2><p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-ink/52">One chat, one folder. Create it in Telegram Desktop, then choose that entire folder in Telescope.</p></div>
           <button type="button" onClick={onClose} aria-label="Close export guide" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink/14 text-xl text-ink/42 transition hover:border-ink/35 hover:text-ink">×</button>
         </header>
-        <ol className="px-6 sm:px-9">{steps.map(([number, title, body]) => <li key={number} className="grid grid-cols-[42px_1fr] gap-3 border-b border-ink/12 py-4 last:border-b-0 sm:grid-cols-[54px_190px_1fr] sm:items-start"><span className="font-mono text-[10px] text-accent">{number}</span><p className="font-semibold text-ink">{title}</p><p className="mt-1 text-sm leading-relaxed text-ink/52 sm:mt-0">{body}</p></li>)}</ol>
-        <footer className="flex flex-wrap items-center justify-between gap-4 bg-shade px-6 py-5 sm:px-9"><p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.12em] text-safe-deep"><Shield /> Sticker assets stay in your browser</p><button type="button" onClick={onClose} className="rounded-full bg-night px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent">Back to upload</button></footer>
+        <ol className="min-h-0 flex-1 overscroll-contain overflow-y-auto px-6 sm:px-9">{steps.map(([number, title, body]) => <li key={number} className="grid grid-cols-[42px_minmax(0,1fr)] gap-x-3 gap-y-1 border-b border-ink/12 py-4 last:border-b-0 sm:grid-cols-[54px_190px_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="font-mono text-[10px] text-accent">{number}</span><p className="font-semibold text-ink">{title}</p><p className="col-start-2 text-sm leading-relaxed text-ink/52 sm:col-start-auto">{body}</p></li>)}</ol>
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-4 bg-shade px-6 py-5 sm:px-9"><p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.12em] text-safe-deep"><Shield /> Sticker assets stay in your browser</p><button type="button" onClick={onClose} className="rounded-full bg-night px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-accent">Back to upload</button></footer>
       </section>
     </div>
   );
