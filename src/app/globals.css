@@ -121,6 +121,44 @@ body {
     radial-gradient(1px 1px at 27% 48%, rgba(255, 255, 255, 0.3), transparent);
 }
 
+/* The homepage remains Telescope midnight, but the first screen has enough
+ * depth to feel like an optical field rather than a flat navy rectangle. */
+.homepage-midnight {
+  background-color: var(--color-night);
+  background-image:
+    radial-gradient(ellipse 56% 30% at 82% 10%, rgba(42, 171, 238, 0.16) 0%, rgba(42, 171, 238, 0.09) 32%, rgba(42, 171, 238, 0.035) 58%, transparent 84%),
+    radial-gradient(ellipse 44% 20% at 8% 53%, rgba(39, 172, 206, 0.1) 0%, rgba(39, 172, 206, 0.035) 58%, transparent 82%),
+    radial-gradient(ellipse 52% 22% at 78% 88%, rgba(42, 171, 238, 0.12) 0%, rgba(42, 171, 238, 0.035) 58%, transparent 82%),
+    linear-gradient(145deg, #09121c 0%, #0e1925 48%, #102131 100%);
+  background-size: 108% 108%, 112% 112%, 110% 110%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: homepage-midnight-drift 18s ease-in-out infinite alternate;
+}
+
+.homepage-midnight .drop-zone {
+  background-color: #1a2936;
+  background-image: none;
+}
+
+.homepage-midnight .drop-zone:hover {
+  background-color: #1c2c3a;
+}
+
+@keyframes homepage-midnight-drift {
+  from { background-position: 48% 46%, 50% 50%, 52% 50%, 0 0; }
+  to { background-position: 54% 51%, 45% 46%, 47% 53%, 0 0; }
+}
+
+@media (max-width: 640px) {
+  .homepage-midnight {
+    background-image:
+      radial-gradient(ellipse 92% 24% at 70% 14%, rgba(42, 171, 238, 0.14) 0%, rgba(42, 171, 238, 0.055) 48%, transparent 86%),
+      radial-gradient(ellipse 70% 18% at 4% 58%, rgba(39, 172, 206, 0.1) 0%, rgba(39, 172, 206, 0.03) 58%, transparent 82%),
+      radial-gradient(ellipse 80% 18% at 88% 90%, rgba(42, 171, 238, 0.1) 0%, rgba(42, 171, 238, 0.03) 58%, transparent 82%),
+      linear-gradient(155deg, #09121c 0%, #0e1925 54%, #102131 100%);
+  }
+}
+
 /** Numbers that change in place — a progress percentage — must not reflow. */
 .tnum {
   font-variant-numeric: tabular-nums;
@@ -172,10 +210,46 @@ body {
 .result-showcase-progress { animation: result-stat-progress 4.2s linear both; }
 
 @keyframes drop-zone-attention {
-  0%, 100% { border-color: rgba(42, 171, 238, 0.55); box-shadow: 0 0 0 0 rgba(42, 171, 238, 0); }
-  35% { border-color: rgba(42, 171, 238, 1); box-shadow: 0 0 0 7px rgba(42, 171, 238, 0.14), 0 18px 60px rgba(42, 171, 238, 0.16); }
+  0%, 100% { border-color: rgba(42, 171, 238, 0.55); box-shadow: 0 0 0 0 rgba(42, 171, 238, 0); transform: scale(1); }
+  18%, 68% { border-color: rgba(42, 171, 238, 1); box-shadow: 0 0 0 8px rgba(42, 171, 238, 0.15), 0 22px 70px rgba(42, 171, 238, 0.2); transform: scale(1.025); }
+  43% { border-color: rgba(42, 171, 238, 0.72); box-shadow: 0 0 0 2px rgba(42, 171, 238, 0.055), 0 10px 34px rgba(42, 171, 238, 0.09); transform: scale(1.006); }
 }
-.drop-zone-attention { animation: drop-zone-attention 900ms cubic-bezier(.16, 1, .3, 1) both; }
+.drop-zone-attention { animation: drop-zone-attention 3000ms ease-in-out both; transform-origin: center; }
+
+@keyframes drop-zone-sweep {
+  0%, 12% { transform: translateX(-130%) skewX(-18deg); opacity: 0; }
+  28% { opacity: .75; }
+  48%, 100% { transform: translateX(230%) skewX(-18deg); opacity: 0; }
+}
+.drop-zone-attention::after {
+  content: "";
+  position: absolute;
+  inset: -35% auto -35% -28%;
+  z-index: 1;
+  width: 22%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+  animation: drop-zone-sweep 3000ms ease-in-out both;
+}
+
+@keyframes drop-zone-copy-emphasis {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.035); }
+  82% { transform: scale(1.018); }
+}
+.drop-zone-attention .drop-zone-copy {
+  animation: drop-zone-copy-emphasis 3000ms cubic-bezier(.16, 1, .3, 1) both;
+  transform-origin: left center;
+}
+
+@keyframes drop-zone-icon-lift {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  16% { transform: translateY(-5px) rotate(-6deg) scale(1.08); }
+  82% { transform: translateY(-2px) rotate(-3deg) scale(1.04); }
+}
+.drop-zone-attention > span {
+  animation: drop-zone-icon-lift 3000ms cubic-bezier(.16, 1, .3, 1) both;
+}
 
 @keyframes privacy-section-enter {
   from { opacity: 0; transform: translateY(22px); filter: blur(4px); }
@@ -193,10 +267,14 @@ body {
   from { width: 0; }
   to { width: 100%; }
 }
-.sample-opening-progress { animation: sample-opening-progress 1500ms linear both; }
+.sample-opening-progress { animation: sample-opening-progress 2500ms linear both; }
 
 @media (prefers-reduced-motion: reduce) {
+  .homepage-midnight { animation: none; }
   .drop-zone-attention { animation: none; border-color: var(--color-accent-lit); }
+  .drop-zone-attention::after,
+  .drop-zone-attention .drop-zone-copy,
+  .drop-zone-attention > span { animation: none; }
   .privacy-section-enter { animation: none; opacity: 1; transform: none; filter: none; }
   .sample-report-enter { animation: none; opacity: 1; transform: none; filter: none; }
   .sample-opening-progress { animation-timing-function: steps(3, end); }
@@ -515,16 +593,6 @@ main[aria-label="Your conversation report"]:has([role="dialog"]) .report-cover-a
   main[aria-label="The report, one screen at a time"] > section { min-height: 100vh !important; break-after: page; page-break-after: always; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .report-actions, nav[aria-label="Jump to a screen"] { display: none !important; }
 }
-
-.drop-zone::after {
-  content: "";
-  position: absolute;
-  inset: -20% -30% 35% 20%;
-  background: radial-gradient(circle, rgba(42, 171, 238, 0.24), transparent 66%);
-  transition: transform 500ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
-  pointer-events: none;
-}
-.drop-zone:hover::after { transform: translate(-8%, 10%) scale(1.08); }
 
 @keyframes drift {
   from {

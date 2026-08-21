@@ -25,7 +25,7 @@ export function GuideFooter() {
           <div className="flex items-center gap-2.5"><Logo size={24} tone="night" /><span className="font-display text-2xl">Telescope</span></div>
           <p className="mt-3 max-w-[42ch] text-sm leading-relaxed text-white/48">An instrument for reading your own messages. Not affiliated with Telegram.</p>
         </div>
-        <Link href="/#drop"><Pill tone="hollow-night">Point it at a chat →</Pill></Link>
+        <Link href="/#home-hero"><Pill tone="hollow-night">Point it at a chat →</Pill></Link>
       </div>
     </footer>
   );
@@ -70,7 +70,7 @@ export function ArticleCta({ title, body }: { title: string; body: string }) {
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-deep">Try it with your history</p>
       <h2 className="mt-4">{title}</h2>
       <p className="mt-5 max-w-[55ch]">{body}</p>
-      <Link href="/#drop" className="mt-7 inline-flex no-underline"><Pill>Analyze a Telegram chat →</Pill></Link>
+      <Link href="/#home-hero" className="mt-7 inline-flex no-underline"><Pill>Analyze a Telegram chat →</Pill></Link>
     </section>
   );
 }

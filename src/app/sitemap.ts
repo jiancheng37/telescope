@@ -8,5 +8,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/guides/export-telegram-chat`, changeFrequency: "yearly", priority: 0.8 },
     { url: `${siteUrl}/guides/chat-analysis-methodology`, changeFrequency: "yearly", priority: 0.7 },
     { url: `${siteUrl}/guides/private-chat-analysis`, changeFrequency: "yearly", priority: 0.7 },
+    { url: `${siteUrl}/terms`, changeFrequency: "yearly", priority: 0.4 },
+    { url: `${siteUrl}/privacy`, changeFrequency: "yearly", priority: 0.4 },
+    { url: `${siteUrl}/acceptable-use`, changeFrequency: "yearly", priority: 0.4 },
   ];
 }

@@ -858,7 +858,7 @@ function HeroSampleReading() {
           <p className={`mt-5 whitespace-nowrap font-display text-[clamp(5.6rem,12vw,9.1rem)] leading-[.7] tracking-[-.055em] ${moment.tone}`}>{moment.value}</p>
         </div>
         <div className="grid grid-rows-[52px_66px]">
-          <div className="flex items-end justify-between gap-5 pb-4">
+          <div className="flex items-baseline justify-between gap-5 pb-4">
             <p className="line-clamp-2 text-sm leading-relaxed text-white/48">{moment.detail}</p>
             <span className="hidden shrink-0 font-mono text-[8px] uppercase tracking-[.14em] text-white/24 sm:block">{moment.note}</span>
           </div>
@@ -966,6 +966,7 @@ function SampleReportGraphic({ kind }: { kind: SampleReportKind }) {
 
 function ReportShowcase() {
   const [active, setActive] = useState(0);
+  const [samplePaused, setSamplePaused] = useState(false);
   const [samplePhase, setSamplePhase] = useState<"waiting" | "loading" | "ready">("waiting");
   const sampleFrameRef = useRef<HTMLDivElement>(null);
   const pageCount = SAMPLE_REPORT_PAGES.length + 1;
@@ -986,14 +987,20 @@ function ReportShowcase() {
 
   useEffect(() => {
     if (samplePhase !== "loading") return;
-    const ready = window.setTimeout(() => setSamplePhase("ready"), 1500);
+    const ready = window.setTimeout(() => setSamplePhase("ready"), 2500);
     return () => window.clearTimeout(ready);
   }, [samplePhase]);
+
+  useEffect(() => {
+    if (samplePhase !== "ready" || samplePaused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setTimeout(() => goTo((active + 1) % pageCount), 5000);
+    return () => window.clearTimeout(timer);
+  }, [active, pageCount, samplePaused, samplePhase]);
 
   return (
     <section
       aria-label="What comes back in a Telescope report"
-      className="starfield relative overflow-hidden bg-night px-5 py-20 text-white sm:px-10 sm:py-28 xl:px-16 2xl:px-24"
+      className="starfield relative overflow-hidden bg-transparent px-5 py-6 text-white sm:px-10 sm:py-10 min-[1025px]:py-28 xl:px-16 2xl:px-24"
     >
       <div className="relative mx-auto grid max-w-[1500px] gap-6 sm:gap-10 lg:grid-cols-[minmax(280px,0.52fr)_minmax(0,1.48fr)] lg:items-start xl:gap-14">
         <header className="sm:border-b sm:border-white/14 sm:pb-9 lg:sticky lg:top-10 lg:border-y lg:py-9">
@@ -1001,7 +1008,7 @@ function ReportShowcase() {
           <h2 className="max-w-[620px] font-display text-[clamp(2.5rem,4.5vw,4.8rem)] leading-[.92] tracking-[-.025em]">The conversation looks <span className="italic text-accent-lit">different from here.</span></h2>
           <p className="mt-7 max-w-[38ch] text-base leading-relaxed text-white/54">Seven pages from one fictional history—measured and interpreted the same way as your own report.</p>
         </header>
-        <div ref={sampleFrameRef} className="flex h-[760px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] sm:h-[780px] lg:h-[720px]">
+        <div ref={sampleFrameRef} onMouseEnter={() => setSamplePaused(true)} onMouseLeave={() => setSamplePaused(false)} onFocusCapture={() => setSamplePaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSamplePaused(false); }} className="flex h-[760px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] sm:h-[780px] lg:h-[720px]">
           {samplePhase !== "ready" ? (
             <div className="grid min-h-0 flex-1 place-items-center bg-night text-white" role="status" aria-live="polite">
               <div className="flex flex-col items-center text-center">
@@ -1027,7 +1034,7 @@ function ReportShowcase() {
                 <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>Conversation report</span><span>01 / {String(pageCount).padStart(2, "0")}</span></div>
                 <div className="my-auto py-12">
                   <p className="font-mono text-[10px] uppercase tracking-[.2em] text-accent-lit">May 2019 — July 2026</p>
-                  <h3 className="mt-6 max-w-[11ch] font-display text-[clamp(4.5rem,11vw,10rem)] leading-[.74] tracking-[-.05em] text-white">Alice <span className="italic text-accent-lit">×</span> Bob</h3>
+                  <h3 className="mt-6 max-w-[11ch] font-display text-[clamp(4.5rem,11vw,10rem)] leading-[.74] tracking-[-.05em] text-white">Alice <span className="italic text-accent-lit">&amp;</span> Bob</h3>
                   <p className="mt-8 max-w-[40ch] text-base leading-relaxed text-white/48 sm:text-lg">Seven years of late nights, long silences, private language, and finding the thread again.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-px border-y border-white/12 bg-white/12 sm:grid-cols-3">
@@ -1074,14 +1081,14 @@ function ExportWalkthrough() {
   return (
     <section onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }} className="overflow-hidden rounded-[24px] border border-ink/12 bg-surface shadow-[0_18px_60px_rgba(14,22,33,.08)]" aria-label="Illustrated Telegram export walkthrough">
       <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4 sm:px-6"><span className="font-mono text-[9px] uppercase tracking-[.16em] text-accent-deep">Telegram Desktop → Telescope</span><span className="font-mono text-[8px] uppercase tracking-[.14em] text-ink/35">{String(active + 1).padStart(2, "0")} / 03</span></div>
-      <div className="relative min-h-[330px] overflow-hidden bg-night p-5 text-white sm:min-h-[360px] sm:p-7 lg:aspect-[16/7] lg:min-h-0">
-        <div key={active} className="result-stat-enter h-full">
-          {active === 0 && <div className="grid h-full grid-cols-[28%_1fr] overflow-hidden rounded-xl border border-white/12 bg-[#172634]"><div className="border-r border-white/10 p-3"><span className="block h-6 rounded-md bg-white/10" /><div className="mt-4 space-y-2">{[0,1,2,3,4].map((item) => <span key={item} className={`block h-8 rounded-md ${item === 1 ? "bg-accent-lit/18" : "bg-white/[.045]"}`} />)}</div></div><div className="relative flex flex-col"><div className="flex h-14 items-center justify-between border-b border-white/10 px-4"><div><p className="text-xs font-semibold">Alice</p><p className="mt-0.5 text-[9px] text-white/32">last seen recently</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-accent-lit text-lg text-night">⋮</span></div><div className="m-auto space-y-2 opacity-45"><span className="block h-7 w-36 rounded-full bg-side-a/45" /><span className="ml-10 block h-7 w-32 rounded-full bg-side-b/45" /></div><div className="absolute right-4 top-12 w-44 overflow-hidden rounded-lg border border-white/12 bg-[#243545] p-1 shadow-2xl"><p className="rounded-md px-3 py-2 text-[10px] text-white/55">View profile</p><p className="rounded-md bg-accent-lit px-3 py-2 text-[10px] font-semibold text-night">Export chat history</p><p className="rounded-md px-3 py-2 text-[10px] text-white/55">Clear history</p></div></div></div>}
-          {active === 1 && <div className="mx-auto grid h-full w-full max-w-[440px] grid-rows-[auto_minmax(0,1fr)_auto] rounded-xl border border-white/12 bg-[#172634] p-5 sm:p-6"><div className="border-b border-white/10 pb-4"><p className="font-display text-2xl">Export chat history</p><p className="mt-1 text-[10px] text-white/38">Choose what Telegram should include.</p></div><div className="min-h-0 overflow-y-auto"><div className="grid min-h-full content-center gap-3 py-3"><div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3"><span className="text-xs text-white/62">Format</span><span className="rounded-full bg-accent-lit px-3 py-1 text-right font-mono text-[8px] uppercase tracking-[.1em] text-night">Machine-readable JSON ✓</span></div>{[["Photos", false], ["Video files", false], ["Stickers", true]].map(([label, checked]) => <div key={String(label)} className="flex items-center justify-between gap-3 text-xs text-white/58"><span>{label}</span><span className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${checked ? "border-accent-lit bg-accent-lit text-night" : "border-white/20"}`}>{checked ? "✓" : ""}</span></div>)}</div></div><div className="flex shrink-0 justify-end border-t border-white/10 pt-3"><span className="rounded-full bg-accent-lit px-5 py-2 text-xs font-semibold text-night">Export</span></div></div>}
-          {active === 2 && <div className="grid h-full items-center gap-6 sm:grid-cols-[1fr_auto_1fr]"><div className="rounded-xl border border-white/12 bg-[#172634] p-5"><div className="flex items-center gap-3"><span className="text-4xl text-warn">▰</span><div><p className="text-sm font-semibold">ChatExport_2026-08-21</p><p className="mt-1 text-[9px] text-white/32">Complete Telegram export</p></div></div><div className="mt-5 space-y-2 border-t border-white/10 pt-4 font-mono text-[9px] text-white/48"><p>⌑ result.json</p><p>▸ stickers/</p><p>▸ video_files/</p></div></div><span className="text-center text-2xl text-accent-lit max-sm:rotate-90">→</span><div className="grid min-h-[160px] place-items-center rounded-xl border-2 border-dashed border-accent-lit/65 bg-accent-lit/[.07] p-5 text-center"><div><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-accent-lit text-xl text-night">↗</span><p className="mt-4 font-display text-2xl">Choose the folder</p><p className="mt-1 text-[9px] text-white/36">Telescope reads result.json inside it</p></div></div></div>}
+      <div className="relative flex h-[430px] overflow-hidden bg-night p-5 text-white sm:h-[360px] sm:p-7 lg:h-auto lg:aspect-[16/7]">
+        <div key={active} className="result-stat-enter grid min-h-0 w-full flex-1 place-items-center">
+          {active === 0 && <div className="grid h-full w-[88%] max-w-[640px] grid-cols-[28%_1fr] overflow-hidden rounded-xl border border-white/12 bg-[#172634] min-[1025px]:w-full"><div className="border-r border-white/10 p-3"><span className="block h-6 rounded-md bg-white/10" /><div className="mt-4 space-y-2">{[0,1,2,3,4].map((item) => <span key={item} className={`block h-8 rounded-md ${item === 1 ? "bg-accent-lit/18" : "bg-white/[.045]"}`} />)}</div></div><div className="relative flex flex-col"><div className="flex h-14 items-center justify-between border-b border-white/10 px-4"><div><p className="text-xs font-semibold">Alice</p><p className="mt-0.5 text-[9px] text-white/32">last seen recently</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-accent-lit text-lg text-night">⋮</span></div><div className="m-auto space-y-2 opacity-45"><span className="block h-7 w-36 rounded-full bg-side-a/45" /><span className="ml-10 block h-7 w-32 rounded-full bg-side-b/45" /></div><div className="absolute right-4 top-12 w-44 overflow-hidden rounded-lg border border-white/12 bg-[#243545] p-1 shadow-2xl"><p className="rounded-md px-3 py-2 text-[10px] text-white/55">View profile</p><p className="rounded-md bg-accent-lit px-3 py-2 text-[10px] font-semibold text-night">Export chat history</p><p className="rounded-md px-3 py-2 text-[10px] text-white/55">Clear history</p></div></div></div>}
+          {active === 1 && <div className="mx-auto grid h-full w-full max-w-[440px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-white/12 bg-[#172634] p-4 min-[641px]:p-6"><div className="border-b border-white/10 pb-3 min-[641px]:pb-4"><p className="font-display text-xl min-[641px]:text-2xl">Export chat history</p><p className="mt-0.5 text-[9px] text-white/38 min-[641px]:mt-1 min-[641px]:text-[10px]">Choose what Telegram should include.</p></div><div className="min-h-0 overflow-y-auto"><div className="grid min-h-full content-center gap-2 py-2 min-[641px]:gap-3 min-[641px]:py-3"><div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 pb-2 min-[641px]:gap-3 min-[641px]:pb-3"><span className="shrink-0 text-xs text-white/62">Format</span><span className="min-w-0 rounded-full bg-accent-lit px-2 py-1 text-right font-mono text-[7px] uppercase tracking-[.08em] text-night min-[641px]:px-3 min-[641px]:text-[8px] min-[641px]:tracking-[.1em]">Machine-readable JSON ✓</span></div>{[["Photos", false], ["Video files", false], ["Stickers", true]].map(([label, checked]) => <div key={String(label)} className="flex items-center justify-between gap-3 text-xs text-white/58"><span>{label}</span><span className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${checked ? "border-accent-lit bg-accent-lit text-night" : "border-white/20"}`}>{checked ? "✓" : ""}</span></div>)}</div></div><div className="flex shrink-0 justify-end border-t border-white/10 pt-2 min-[641px]:pt-3"><span className="rounded-full bg-accent-lit px-4 py-1.5 text-[11px] font-semibold text-night min-[641px]:px-5 min-[641px]:py-2 min-[641px]:text-xs">Export</span></div></div>}
+          {active === 2 && <div className="grid w-[88%] max-w-[680px] items-center gap-3 min-[641px]:gap-6 min-[641px]:grid-cols-[1fr_auto_1fr] min-[1025px]:h-full min-[1025px]:w-full"><div className="rounded-xl border border-white/12 bg-[#172634] p-4 min-[641px]:p-5"><div className="flex min-w-0 items-center gap-3"><span className="shrink-0 text-3xl text-warn min-[641px]:text-4xl">▰</span><div className="min-w-0"><p className="truncate text-xs font-semibold min-[641px]:text-sm">ChatExport_2026-08-21</p><p className="mt-0.5 text-[8px] text-white/32 min-[641px]:mt-1 min-[641px]:text-[9px]">Complete Telegram export</p></div></div><div className="mt-3 space-y-1 border-t border-white/10 pt-3 font-mono text-[8px] text-white/48 min-[641px]:mt-5 min-[641px]:space-y-2 min-[641px]:pt-4 min-[641px]:text-[9px]"><p>⌑ result.json</p><p>▸ stickers/</p><p>▸ video_files/</p></div></div><span className="text-center text-xl text-accent-lit max-[640px]:rotate-90 min-[641px]:text-2xl">→</span><div className="grid min-h-[108px] place-items-center rounded-xl border-2 border-dashed border-accent-lit/65 bg-accent-lit/[.07] p-3 text-center min-[641px]:min-h-[160px] min-[641px]:p-5"><div className="flex items-center gap-3 text-left min-[641px]:block min-[641px]:text-center"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent-lit text-lg text-night min-[641px]:mx-auto min-[641px]:h-12 min-[641px]:w-12 min-[641px]:text-xl">↗</span><div className="min-w-0"><p className="font-display text-xl min-[641px]:mt-4 min-[641px]:text-2xl">Choose the folder</p><p className="mt-0.5 text-[8px] leading-snug text-white/36 min-[641px]:mt-1 min-[641px]:text-[9px]">Telescope reads result.json inside it</p></div></div></div></div>}
         </div>
       </div>
-      <div className="p-5 sm:p-6 lg:p-5"><p className="min-h-[48px] text-sm leading-relaxed text-ink/62">{EXPORT_SCENES[active].caption}</p><div className="mt-5 grid grid-cols-3 border-t border-ink/10 lg:mt-3">{EXPORT_SCENES.map((scene, index) => <button key={scene.label} type="button" aria-pressed={index === active} onClick={() => setActive(index)} className={`border-t-2 px-2 pt-3 text-left text-[10px] font-semibold transition ${index === active ? "border-accent text-ink" : "border-transparent text-ink/35 hover:text-ink/65"}`}><span className="mr-1 font-mono text-[8px] text-accent-deep">0{index + 1}</span> {scene.label}</button>)}</div></div>
+      <div className="p-5 sm:p-6 lg:p-5"><p className="line-clamp-3 h-[72px] overflow-hidden text-sm leading-relaxed text-ink/62 sm:line-clamp-2 sm:h-[48px]">{EXPORT_SCENES[active].caption}</p><div className="mt-5 grid grid-cols-3 border-t border-ink/10 lg:mt-3">{EXPORT_SCENES.map((scene, index) => <button key={scene.label} type="button" aria-pressed={index === active} onClick={() => setActive(index)} className={`border-t-2 px-2 pt-3 text-left text-[10px] font-semibold transition ${index === active ? "border-accent text-ink" : "border-transparent text-ink/35 hover:text-ink/65"}`}><span className="mr-1 font-mono text-[8px] text-accent-deep">0{index + 1}</span> {scene.label}</button>)}</div></div>
     </section>
   );
 }
@@ -1107,7 +1114,7 @@ function Landing({
 
   useEffect(() => {
     if (!dropHighlighted) return;
-    const timer = window.setTimeout(() => setDropHighlighted(false), 1100);
+    const timer = window.setTimeout(() => setDropHighlighted(false), 3000);
     return () => window.clearTimeout(timer);
   }, [dropHighlighted]);
 
@@ -1138,9 +1145,16 @@ function Landing({
     window.requestAnimationFrame(() => setDropHighlighted(true));
   };
 
+  const returnToHero = () => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollToSection("home-hero");
+    window.setTimeout(highlightDropZone, reducedMotion ? 0 : 650);
+  };
+
   return (
     <main className="min-h-dvh bg-surface">
-      <section className="starfield relative min-h-dvh overflow-hidden bg-night text-white">
+      <div className="homepage-midnight">
+      <section id="home-hero" className="starfield relative min-h-dvh scroll-mt-0 overflow-hidden bg-transparent text-white">
         <header className="relative z-10 flex h-[72px] items-center justify-between border-b border-white/12 px-5 sm:px-10 xl:px-16 2xl:px-24">
           <div className="flex items-center gap-2.5 rise">
             <Logo size={25} tone="night" />
@@ -1188,6 +1202,9 @@ function Landing({
                   See a sample report
                 </button>
               </div>
+              <button type="button" onClick={() => scrollToSection("privacy")} className="mt-4 inline-flex items-center gap-2 text-left text-xs text-white/42 transition hover:text-white/72 focus-visible:outline-none focus-visible:text-white">
+                Wait—isn&rsquo;t this a total violation of privacy? <span aria-hidden="true" className="text-accent-lit">↓</span>
+              </button>
             </div>
           </div>
 
@@ -1224,7 +1241,7 @@ function Landing({
             <span className={`relative z-10 grid size-[clamp(2.25rem,6vw,4rem)] shrink-0 place-items-center rounded-full border transition duration-300 ${dragging ? "rotate-[-8deg] border-accent-lit bg-accent-lit text-night" : "border-accent-lit/70 bg-accent-lit/10 text-accent-lit group-hover:-translate-y-1 group-hover:bg-accent-lit group-hover:text-night"}`}>
               <span className="text-2xl">↗</span>
             </span>
-            <div className="relative z-10 min-w-0">
+            <div className="drop-zone-copy relative z-10 min-w-0">
             {phase.kind === "working" ? (
               <div><p className="font-display text-[30px] leading-tight sm:text-[36px]">{phase.note}…</p><p className="mt-2 text-xs text-white/48">Large exports can pause the tab briefly.</p></div>
             ) : (
@@ -1249,7 +1266,7 @@ function Landing({
       <div id="what-comes-back" className="scroll-mt-0"><ReportShowcase /></div>
 
       {/* privacy */}
-      <section ref={privacyRef} className="starfield relative overflow-hidden bg-night px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
+      <section id="privacy" ref={privacyRef} className="starfield relative scroll-mt-0 overflow-hidden bg-transparent px-5 py-6 sm:px-10 sm:py-10 min-[1025px]:py-16 xl:px-16 2xl:px-24">
         <div className="relative grid gap-14 lg:grid-cols-2">
           <div className={privacyVisible ? "privacy-section-enter" : "opacity-0"}>
             <Kicker tone="lit" className="mb-5">
@@ -1258,10 +1275,14 @@ function Landing({
             <h2 className="font-display text-[40px] leading-[1.02] text-white sm:text-[52px]">
               Local first. AI only when you ask.
             </h2>
-            <p className="mt-5 max-w-[440px] text-[17px] leading-relaxed text-white/66">
+            <p className="mt-5 max-w-[440px] text-[17px] leading-relaxed text-white/66 min-[769px]:hidden">
+              Your numerical report stays on this device. AI insights are optional: the encrypted
+              upload is deleted after processing, with a one-day expiry as backup.
+            </p>
+            <p className="mt-5 hidden max-w-[440px] text-[17px] leading-relaxed text-white/66 min-[769px]:block">
               The numerical report is built by the page you&rsquo;re looking at, on the machine
-              you&rsquo;re using. AI insights are a separate, explicit choice—and shared links let
-              you decide whether message evidence stays hidden.
+              you&rsquo;re using. Additional AI insights are a separate choice: they use a temporary,
+              encrypted upload that is deleted after processing, with automatic one-day expiry as a backstop.
             </p>
           </div>
           <ol className="flex flex-col gap-px overflow-hidden rounded-xl border border-white/16">
@@ -1278,8 +1299,8 @@ function Landing({
               },
               {
                 n: "03",
-                h: "The written half is opt-in, and it is an upload",
-                b: "One button, clearly labelled, sends the conversation to a model to be read. Don't press it and the report is still complete — just unnarrated.",
+                h: "Additional AI insights are opt-in",
+                b: "Unlocking AI insights temporarily uploads the raw export to an encrypted private storage, then sends a sampled corpus to OpenAI. The raw export is deleted after processing; the saved report may retain the insights and exact quotes used as evidence.",
               },
             ].map((step) => (
               <li key={step.n} className={`${privacyVisible ? "privacy-section-enter" : "opacity-0"} flex gap-4 bg-white/5 p-6`} style={{ animationDelay: `${160 + Number(step.n) * 110}ms` }}>
@@ -1293,15 +1314,16 @@ function Landing({
             <li className={`${privacyVisible ? "privacy-section-enter" : "opacity-0"} flex items-center gap-2.5 bg-safe/18 px-6 py-4`} style={{ animationDelay: "620ms" }}>
               <span className="block h-[7px] w-[7px] rounded-full bg-safe-lit" />
               <span className="font-mono text-[11.5px] tracking-wide text-safe-lit">
-                raw chat stays local · saved results are account-only
+                numerical report stays local · uploaded chat is deleted after AI processing
               </span>
             </li>
           </ol>
         </div>
       </section>
+      </div>
 
       {/* how to export */}
-      <div id="export" className="scroll-mt-0 bg-shade px-5 py-16 sm:px-10 lg:flex lg:min-h-dvh lg:flex-col lg:justify-center lg:py-7 xl:px-16 2xl:px-24">
+      <div id="export" className="scroll-mt-0 bg-shade px-5 py-6 sm:px-10 sm:py-10 min-[1025px]:flex min-[1025px]:min-h-dvh min-[1025px]:flex-col min-[1025px]:justify-center min-[1025px]:py-7 xl:px-16 2xl:px-24">
         <div className="mx-auto w-full max-w-[840px] sm:border-b sm:border-ink/12 sm:pb-8 lg:pb-6">
           <Kicker tone="deep" className="mb-3">Get the folder</Kicker>
           <h2 className="max-w-[840px] font-display text-[31px] leading-tight text-ink sm:text-[38px]">
@@ -1319,7 +1341,7 @@ function Landing({
 
       {/* final CTA */}
       <div
-        className="flex flex-col items-center gap-5 px-5 py-20 text-center sm:px-10 xl:px-16 2xl:px-24"
+        className="flex flex-col items-center gap-5 px-5 py-6 text-center sm:px-10 sm:py-10 min-[1025px]:py-20 xl:px-16 2xl:px-24"
         style={{
           background: "radial-gradient(700px 300px at 50% 0%, rgba(42,171,238,0.2), transparent 72%)",
         }}
@@ -1330,7 +1352,7 @@ function Landing({
           <br />
           Somebody should look at it.
         </h2>
-        <button type="button" onClick={() => inputRef.current?.click()} className="mt-1.5">
+        <button type="button" onClick={returnToHero} className="mt-1.5">
           <Pill>Point it at a chat</Pill>
         </button>
         <p className="font-mono text-[11.5px] text-ink/50">
@@ -1361,11 +1383,11 @@ function Landing({
             </div>
             <div className="flex flex-col gap-2.5 text-sm">
               <Kicker tone="faint-lit" className="mb-1">
-                Fine print
+                Terms &amp; policies
               </Kicker>
-              <span>Local analysis works without an account</span>
-              <span>AI reading and message sharing are opt-in</span>
-              <span>Saved reports stay in your account</span>
+              <Link href="/terms" className="transition hover:text-white">Terms of Use</Link>
+              <Link href="/privacy" className="transition hover:text-white">Privacy Policy</Link>
+              <Link href="/acceptable-use" className="transition hover:text-white">Acceptable Use</Link>
             </div>
           </div>
           <div className="flex flex-wrap justify-between gap-3 pt-5 font-mono text-[11px] tracking-wider text-white/40">
