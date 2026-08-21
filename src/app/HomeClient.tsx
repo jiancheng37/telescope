@@ -727,56 +727,361 @@ function ReadingControl({ phase, onRun }: { phase: Phase; onRun: () => void }) {
 // ---------------------------------------------------------------- the landing
 
 const REPORT_MOMENTS = [
-  { eyebrow: "Rhythm", title: "When you actually talk", value: "23:40", detail: "The hour holding a third of everything.", note: "Activity · by hour", tone: "text-white", bars: [18, 12, 8, 6, 5, 7, 11, 16, 24, 31, 38, 44, 35, 28, 32, 39, 48, 61, 73, 82, 91, 100, 72, 46] },
+  { eyebrow: "Rhythm", title: "When the conversation peaks", value: "23:40", detail: "The conversation was most active around 23:40.", note: "Activity · by time of day", tone: "text-white", bars: [18, 12, 8, 6, 5, 7, 11, 16, 24, 31, 38, 44, 35, 28, 32, 39, 48, 61, 73, 82, 91, 100, 72, 46] },
   { eyebrow: "Silence", title: "The gap that became a chapter", value: "41 days", detail: "Then one of you came back at 02:14.", note: "Longest silence · all time", tone: "text-side-a", bars: [84, 72, 64, 52, 30, 10, 4, 3, 3, 4, 8, 22, 48, 76, 92, 68, 54, 61, 80, 72, 58, 44, 61, 78] },
   { eyebrow: "Private language", title: "The phrase that became yours", value: "“sooo?”", detail: "312 appearances. Nowhere in the first year.", note: "Distinctive language · log-odds", tone: "text-accent-lit italic", bars: [4, 7, 12, 17, 25, 31, 36, 43, 48, 55, 63, 72, 78, 87, 96, 84, 91, 77, 88, 94, 82, 98, 91, 100] },
-  { eyebrow: "Return pattern", title: "Who restarts the conversation", value: "62%", detail: "Measured after meaningful silence, not overnight gaps.", note: "Re-entry · 24h threshold", tone: "text-safe-lit", bars: [63, 42, 71, 53, 80, 61, 72, 48, 66, 57, 85, 63, 76, 55, 69, 82, 61, 73, 58, 78, 65, 84, 70, 88] },
+  { eyebrow: "Return pattern", title: "Who restarts the conversation", value: "62%", detail: "Alice restarted 62% of conversations after a meaningful silence.", note: "Re-entry · 24h threshold", tone: "text-safe-lit", bars: [63, 42, 71, 53, 80, 61, 72, 48, 66, 57, 85, 63, 76, 55, 69, 82, 61, 73, 58, 78, 65, 84, 70, 88] },
   { eyebrow: "The receipts", title: "The longest uninterrupted run", value: "17 texts", detail: "Sent before the other person replied.", note: "Monologue streak · with context", tone: "text-warn", bars: [8, 13, 18, 24, 29, 37, 45, 52, 61, 70, 79, 88, 100, 91, 83, 74, 62, 50, 43, 35, 27, 21, 16, 12] },
   { eyebrow: "AI reading", title: "The roles you grew into", value: "Archivist × Instigator", detail: "A written reading whose claims link back to the messages.", note: "Opt-in · evidence checked", tone: "text-accent-lit", bars: [42, 48, 45, 58, 54, 67, 62, 73, 70, 81, 77, 89, 85, 94, 88, 96, 91, 84, 78, 86, 74, 69, 61, 55] },
 ] as const;
 
-function ReportShowcase() {
+const HERO_SAMPLE_MOMENTS = REPORT_MOMENTS.slice(0, 5);
+const HERO_HEADLINE_ENDINGS = [
+  "you were too close to notice.",
+  "after the dust settles.",
+  "through a different lens.",
+  "behind the chaos.",
+] as const;
+
+function ShufflingHeroEnding() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(
+      () => setActive((current) => (current + 1) % HERO_HEADLINE_ENDINGS.length),
+      3800,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <>
+      <span className="sr-only">you were too close to notice, after the dust settles, through a different lens, and behind the chaos.</span>
+      <span aria-hidden="true" className="block overflow-hidden">
+        <span key={HERO_HEADLINE_ENDINGS[active]} className="result-stat-enter block italic text-accent-lit">
+          {HERO_HEADLINE_ENDINGS[active]}
+        </span>
+      </span>
+    </>
+  );
+}
+
+function HeroMomentVisual({ index }: { index: number }) {
+  if (index === 0) {
+    return (
+      <div className="relative pt-5" aria-label="23:40 marked near the end of a 24-hour timeline">
+        <div className="flex justify-between font-mono text-[8px] uppercase tracking-[.12em] text-white/25"><span>00:00</span><span>12:00</span><span>24:00</span></div>
+        <div className="relative mt-2 h-5 border-t border-white/18">
+          <span className="absolute -top-[5px] left-[98.6%] h-3 w-3 -translate-x-1/2 rounded-full border-2 border-night bg-accent-lit ring-1 ring-accent-lit" />
+          <span className="absolute right-0 top-2 font-mono text-[8px] uppercase tracking-[.12em] text-accent-lit">peak · 23:40</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (index === 1) {
+    return (
+      <div className="pt-5" aria-label="A 41-day interval between two messages">
+        <div className="flex items-center gap-3"><span className="h-2.5 w-2.5 rounded-full bg-white/55" /><span className="h-px flex-1 border-t border-dashed border-side-a/70" /><span className="font-mono text-[9px] uppercase tracking-[.14em] text-side-a">41 days</span><span className="h-px flex-1 border-t border-dashed border-side-a/70" /><span className="h-2.5 w-2.5 rounded-full bg-side-a" /></div>
+        <div className="mt-2 flex justify-between font-mono text-[8px] uppercase tracking-[.12em] text-white/25"><span>last message</span><span>next message</span></div>
+      </div>
+    );
+  }
+
+  if (index === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-px bg-white/12" aria-label="The phrase appeared zero times in year one and 312 times later">
+        <div className="bg-night py-3 pr-4"><span className="block font-mono text-[8px] uppercase tracking-[.13em] text-white/25">Year one</span><span className="mt-1 block font-display text-2xl text-white/45">0 uses</span></div>
+        <div className="bg-night py-3 pl-4"><span className="block font-mono text-[8px] uppercase tracking-[.13em] text-accent-lit">Later</span><span className="mt-1 block font-display text-2xl text-accent-lit">312 uses</span></div>
+      </div>
+    );
+  }
+
+  if (index === 3) {
+    return (
+      <div aria-label="Conversation restarts split: Alice 62 percent, Bob 38 percent">
+        <div className="flex h-2 overflow-hidden rounded-full"><span className="w-[62%] bg-safe-lit" /><span className="w-[38%] bg-white/14" /></div>
+        <div className="mt-2 flex justify-between font-mono text-[8px] uppercase tracking-[.12em]"><span className="text-safe-lit">Alice · 62%</span><span className="text-white/28">Bob · 38%</span></div>
+      </div>
+    );
+  }
+
+  return (
+    <div aria-label="Seventeen consecutive messages before a reply">
+      <div className="flex items-center gap-1.5">
+        {Array.from({ length: 17 }, (_, item) => <span key={item} className="h-5 min-w-0 flex-1 rounded-[3px] bg-warn/75" />)}
+        <span className="ml-1 h-5 w-2.5 shrink-0 rounded-[3px] bg-white/35" />
+      </div>
+      <div className="mt-2 flex justify-between font-mono text-[8px] uppercase tracking-[.12em]"><span className="text-warn">17 sent in a row</span><span className="text-white/28">reply</span></div>
+    </div>
+  );
+}
+
+function HeroSampleReading() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % REPORT_MOMENTS.length), 4200);
+    const timer = window.setInterval(
+      () => setActive((current) => (current + 1) % HERO_SAMPLE_MOMENTS.length),
+      4200,
+    );
     return () => window.clearInterval(timer);
-  }, [paused, active]);
+  }, [paused]);
 
-  const moment = REPORT_MOMENTS[active];
+  const moment = HERO_SAMPLE_MOMENTS[active];
+  const next = () => setActive((current) => (current + 1) % HERO_SAMPLE_MOMENTS.length);
 
   return (
     <section
-      aria-label="What comes back in a Telescope report"
+      aria-label="Illustrative Telescope report reading"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false);
       }}
-      className="starfield relative overflow-hidden bg-night px-5 py-20 text-white sm:px-10 sm:py-28 xl:px-16 2xl:px-24"
+      className="relative h-[390px] overflow-hidden border-y border-white/14 py-5 sm:h-[400px]"
     >
-      <div className="relative mx-auto max-w-[1500px]">
-        <header className="mb-12 grid gap-5 border-b border-white/14 pb-9 lg:grid-cols-[1fr_1fr] lg:items-end">
-          <div><Kicker tone="lit" className="mb-4">What comes back</Kicker><h2 className="max-w-[760px] font-display text-[clamp(3.4rem,7vw,7.4rem)] leading-[.84] tracking-[-.035em]">One conversation.<br /><span className="italic text-accent-lit">Six ways back in.</span></h2></div>
-          <p className="max-w-[48ch] text-base leading-relaxed text-white/54 lg:justify-self-end lg:text-lg">Telescope turns the whole history into a report you can move through—not a dashboard dump. Watch the instruments rotate, or choose one yourself.</p>
-        </header>
-        <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[310px_minmax(0,1fr)]">
-          <div className="border-t border-white/14">
-            {REPORT_MOMENTS.map((item, index) => <button key={item.eyebrow} type="button" aria-pressed={index === active} onClick={() => setActive(index)} className={`group grid w-full grid-cols-[30px_1fr] gap-3 border-b py-4 text-left transition ${index === active ? "border-accent-lit text-white" : "border-white/10 text-white/38 hover:border-white/25 hover:text-white/72"}`}><span className={`font-mono text-[9px] ${index === active ? "text-accent-lit" : "text-white/24"}`}>{String(index + 1).padStart(2, "0")}</span><span><span className="block text-sm font-semibold">{item.eyebrow}</span>{index === active && <span className="mt-1 block text-[11px] text-white/36">{item.title}</span>}</span></button>)}
+      <div className="flex items-center justify-between gap-5 font-mono text-[9px] uppercase tracking-[.17em]">
+        <span className="text-accent-lit">Sample reading · illustrative</span>
+        <button type="button" onClick={next} className="text-white/30 transition hover:text-white focus-visible:text-white focus-visible:outline-none">
+          {String(active + 1).padStart(2, "0")} / {String(HERO_SAMPLE_MOMENTS.length).padStart(2, "0")} &nbsp;→
+        </button>
+      </div>
+
+      <div key={moment.eyebrow} className="result-stat-enter mt-6 grid h-[310px] grid-rows-[minmax(0,1fr)_118px] sm:h-[320px]">
+        <div className="min-h-0">
+          <p className="font-mono text-[9px] uppercase tracking-[.16em] text-white/38">{moment.title}</p>
+          <p className={`mt-5 whitespace-nowrap font-display text-[clamp(5.6rem,12vw,9.1rem)] leading-[.7] tracking-[-.055em] ${moment.tone}`}>{moment.value}</p>
+        </div>
+        <div className="grid grid-rows-[52px_66px]">
+          <div className="flex items-end justify-between gap-5 pb-4">
+            <p className="line-clamp-2 text-sm leading-relaxed text-white/48">{moment.detail}</p>
+            <span className="hidden shrink-0 font-mono text-[8px] uppercase tracking-[.14em] text-white/24 sm:block">{moment.note}</span>
           </div>
-          <div className="relative min-h-[460px] overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] p-6 sm:p-9 lg:min-h-[540px] lg:p-12">
-            <div key={moment.eyebrow} className="result-stat-enter flex h-full min-h-[400px] flex-col">
-              <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>{moment.note}</span><span>{String(active + 1).padStart(2, "0")} / {String(REPORT_MOMENTS.length).padStart(2, "0")}</span></div>
-              <div className="my-auto py-10"><p className="font-mono text-[10px] uppercase tracking-[.18em] text-accent-lit">{moment.title}</p><p className={`mt-5 max-w-[12ch] font-display text-[clamp(4rem,9vw,9rem)] leading-[.78] tracking-[-.045em] ${moment.tone}`}>{moment.value}</p><p className="mt-7 max-w-[46ch] text-sm leading-relaxed text-white/48 sm:text-base">{moment.detail}</p></div>
-              <div className="flex h-24 items-end gap-[3px] border-b border-white/12" aria-hidden="true">{moment.bars.map((height, index) => <span key={index} className={`block min-w-0 flex-1 rounded-t-sm ${index % 3 === 0 ? "bg-accent-lit/70" : "bg-white/14"}`} style={{ height: `${height}%` }} />)}</div>
-            </div>
-            {!paused && <span key={`showcase-progress-${active}`} className="result-showcase-progress absolute bottom-0 left-0 h-[2px] bg-accent-lit" />}
+          <div className="flex h-[66px] flex-col justify-end overflow-hidden">
+            <HeroMomentVisual index={active} />
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function CompactHeroSampleReading() {
+  const [active, setActive] = useState(1);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % HERO_SAMPLE_MOMENTS.length), 4200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const moment = HERO_SAMPLE_MOMENTS[active];
+  return (
+    <div className="rise w-full border-y border-white/14 py-4 text-left sm:max-w-[440px] lg:hidden" style={{ animationDelay: "440ms" }} aria-label="Illustrative rotating report finding">
+      <div key={moment.eyebrow} className="result-stat-enter min-h-[180px] sm:min-h-0">
+        <p className="font-mono text-[8px] uppercase tracking-[.15em] text-accent-lit">{moment.title}</p>
+        <p className={`mt-3 font-display text-[clamp(3.4rem,12vw,5.25rem)] leading-[.78] tracking-[-.035em] sm:whitespace-nowrap ${moment.tone}`}>{moment.value}</p>
+        <p className="mt-3 font-mono text-[8px] uppercase tracking-[.13em] text-white/30">{moment.note}</p>
+        <div className="mt-3 min-h-[52px] text-left sm:h-[52px] sm:overflow-hidden"><HeroMomentVisual index={active} /></div>
+      </div>
+    </div>
+  );
+}
+
+const SAMPLE_REPORT_PAGES = [
+  {
+    kind: "split",
+    kicker: "The yapper split",
+    title: "Alice sent fewer messages—and more of the words.",
+    detail: "Message count and word count do not tell the same story. Alice wrote longer; Bob sent more often.",
+  },
+  {
+    kind: "communication",
+    kicker: "How you speak",
+    title: "Same chat. Different dialects.",
+    detail: "Emoji, stickers, voice notes and video messages reveal the formats each person reaches for when plain text is not enough.",
+  },
+  {
+    kind: "chapters",
+    kicker: "Your eras",
+    title: "This conversation had chapters.",
+    detail: "Changes in volume, timing and language reveal the stretches where the relationship found a different rhythm.",
+  },
+  {
+    kind: "streak",
+    kicker: "Double Texter Award",
+    title: "Bob reached eight follow-ups without a reply.",
+    detail: "A follow-up counts only when another unanswered message arrives at least two minutes later.",
+  },
+  {
+    kind: "language",
+    kicker: "Your language",
+    title: "The phrases that sound like each of you.",
+    detail: "Not simply the most common words—the expressions each person uses unusually often, and the ones that became shared language.",
+  },
+  {
+    kind: "roles",
+    kicker: "Character cards",
+    title: "The roles you grew into.",
+    detail: "Optional AI interpretation names repeated behaviour, then links every claim back to evidence in the conversation.",
+  },
+] as const;
+
+type SampleReportKind = (typeof SAMPLE_REPORT_PAGES)[number]["kind"];
+
+function SampleReportGraphic({ kind }: { kind: SampleReportKind }) {
+  if (kind === "split") {
+    const rows = [
+      ["messages", "7,842", "10,584", 43],
+      ["words", "68,210", "51,404", 57],
+      ["characters / message", "51", "29", 64],
+    ] as const;
+    return <div className="space-y-5">{rows.map(([label, a, b, share]) => <div key={label}><div className="mb-2 flex items-end justify-between gap-4"><span className="text-xs text-white/46">{label}</span><span className="font-mono text-[9px]"><span className="text-side-a">{a}</span><span className="text-white/25"> / </span><span className="text-side-b">{b}</span></span></div><div className="flex h-3 overflow-hidden rounded-full bg-white/8"><span className="bg-side-a" style={{ width: `${share}%` }} /><span className="bg-side-b" style={{ width: `${100 - share}%` }} /></div></div>)}</div>;
+  }
+
+  if (kind === "communication") {
+    return <div className="grid grid-cols-2 gap-6"><section className="border-t border-side-a pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-a">Alice</p><p className="mt-3 text-[clamp(1.8rem,4vw,3.6rem)] leading-none">😭 ❤️ 🫡</p><dl className="mt-4 space-y-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-white/36"><div className="flex justify-between"><dt>emoji</dt><dd className="text-white/70">1,284</dd></div><div className="flex justify-between"><dt>voice notes</dt><dd className="text-white/70">46 · 2.1h</dd></div><div className="flex justify-between"><dt>stickers</dt><dd className="text-white/70">73</dd></div></dl></section><section className="border-t border-side-b pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-b">Bob</p><p className="mt-3 text-[clamp(1.8rem,4vw,3.6rem)] leading-none">💀 👍 🧍</p><dl className="mt-4 space-y-1.5 font-mono text-[8px] uppercase tracking-[.1em] text-white/36"><div className="flex justify-between"><dt>emoji</dt><dd className="text-white/70">642</dd></div><div className="flex justify-between"><dt>video messages</dt><dd className="text-white/70">119 · 1.4h</dd></div><div className="flex justify-between"><dt>stickers</dt><dd className="text-white/70">311</dd></div></dl></section></div>;
+  }
+
+  if (kind === "chapters") {
+    const eras = [["May ’19", "New-friend messages", "18%", "bg-accent"], ["Nov ’20", "Long-distance months", "27%", "bg-safe"], ["Aug ’22", "Living in the same city", "31%", "bg-warn"], ["Jan ’25", "The everyday check-in", "24%", "bg-accent-lit"]] as const;
+    return <div aria-label="Conversation timeline from May 2019 to July 2026"><div className="relative pt-5"><div className="absolute left-0 right-0 top-[25px] h-px bg-white/18" /><div className="relative flex">{eras.map(([date, name, width, color]) => <div key={name} style={{ width }} className="pr-2"><span className={`block h-3 w-3 rounded-full border-2 border-night ${color}`} /><p className="mt-3 font-mono text-[7px] uppercase tracking-[.1em] text-white/30">{date}</p><p className="mt-1 max-w-[16ch] text-[11px] leading-tight text-white/68">{name}</p></div>)}</div></div><div className="mt-5 flex items-center gap-3 border-t border-white/10 pt-3 font-mono text-[8px] uppercase tracking-[.1em] text-white/28"><span className="h-2 w-2 rounded-full bg-white/18" /><span>Quiet stretches remain visible between eras</span><span className="ml-auto">Jul ’26</span></div></div>;
+  }
+
+  if (kind === "streak") {
+    return <div><div className="flex items-center gap-1.5" aria-label="Bob sent an initial message and eight qualifying follow-ups before Alice replied"><div className="flex flex-col items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full border border-side-b/70 bg-side-b/12 font-mono text-[8px] text-side-b">0</span><span className="font-mono text-[7px] uppercase text-white/25">first</span></div><span className="mb-5 h-px flex-1 bg-side-b/35" />{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex flex-col items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-side-b font-mono text-[8px] text-night">+{index + 1}</span><span className="font-mono text-[7px] uppercase text-white/25">{3 + index * 2}m</span></div>)}<span className="mb-5 h-px flex-1 border-t border-dashed border-white/25" /><div className="flex flex-col items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-side-a font-mono text-[9px] text-white">✓</span><span className="font-mono text-[7px] uppercase text-side-a">reply</span></div></div><div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/12 pt-3 font-mono text-[8px] uppercase tracking-[.1em]"><span className="text-side-b">Bob · 9 messages total</span><span className="text-white/32">8 follow-ups · 17 minutes unanswered</span></div></div>;
+  }
+
+  if (kind === "language") {
+    return <div className="grid gap-6 sm:grid-cols-2"><div className="border-t border-side-a pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-a">Alice</p><p className="mt-3 font-display text-[clamp(1.7rem,3vw,3rem)] leading-tight text-white">“be serious”<br /><span className="text-white/60">“wait wait”</span></p></div><div className="border-t border-side-b pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-b">Bob</p><p className="mt-3 font-display text-[clamp(1.7rem,3vw,3rem)] leading-tight text-white">“objectively”<br /><span className="text-white/60">“hear me out”</span></p></div><div className="sm:col-span-2 flex items-baseline gap-4 border-t border-white/12 pt-4"><span className="font-mono text-[8px] uppercase tracking-[.14em] text-white/28">What became theirs</span><span className="font-display text-2xl italic text-accent-lit">“tiny emergency”</span></div></div>;
+  }
+
+  return <div className="grid gap-5 sm:grid-cols-2"><article className="border-t border-side-a pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-a">Alice · Role 01</p><h4 className="mt-2 font-display text-3xl text-white">The Archivist</h4><p className="mt-2 text-xs leading-relaxed text-white/45">Keeps the shared past retrievable, resurfacing old details exactly when they matter.</p><p className="mt-3 border-l border-white/14 pl-3 text-xs italic text-white/32">“I found the screenshot from that night.”</p></article><article className="border-t border-side-b pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-b">Bob · Role 01</p><h4 className="mt-2 font-display text-3xl text-white">The Instigator</h4><p className="mt-2 text-xs leading-relaxed text-white/45">Turns an ordinary check-in into the beginning of another elaborate side quest.</p><p className="mt-3 border-l border-white/14 pl-3 text-xs italic text-white/32">“Okay, but what if we actually went?”</p></article></div>;
+}
+
+function ReportShowcase() {
+  const [active, setActive] = useState(0);
+  const [samplePhase, setSamplePhase] = useState<"waiting" | "loading" | "ready">("waiting");
+  const sampleFrameRef = useRef<HTMLDivElement>(null);
+  const pageCount = SAMPLE_REPORT_PAGES.length + 1;
+  const moment = active === 0 ? null : SAMPLE_REPORT_PAGES[active - 1];
+  const goTo = (page: number) => setActive(Math.min(pageCount - 1, Math.max(0, page)));
+
+  useEffect(() => {
+    const frame = sampleFrameRef.current;
+    if (!frame || samplePhase !== "waiting") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setSamplePhase("loading");
+      observer.disconnect();
+    }, { threshold: 0.3 });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [samplePhase]);
+
+  useEffect(() => {
+    if (samplePhase !== "loading") return;
+    const ready = window.setTimeout(() => setSamplePhase("ready"), 1500);
+    return () => window.clearTimeout(ready);
+  }, [samplePhase]);
+
+  return (
+    <section
+      aria-label="What comes back in a Telescope report"
+      className="starfield relative overflow-hidden bg-night px-5 py-20 text-white sm:px-10 sm:py-28 xl:px-16 2xl:px-24"
+    >
+      <div className="relative mx-auto grid max-w-[1500px] gap-6 sm:gap-10 lg:grid-cols-[minmax(280px,0.52fr)_minmax(0,1.48fr)] lg:items-start xl:gap-14">
+        <header className="sm:border-b sm:border-white/14 sm:pb-9 lg:sticky lg:top-10 lg:border-y lg:py-9">
+          <Kicker tone="lit" className="mb-4">Illustrative conversation</Kicker>
+          <h2 className="max-w-[620px] font-display text-[clamp(2.5rem,4.5vw,4.8rem)] leading-[.92] tracking-[-.025em]">The conversation looks <span className="italic text-accent-lit">different from here.</span></h2>
+          <p className="mt-7 max-w-[38ch] text-base leading-relaxed text-white/54">Seven pages from one fictional history—measured and interpreted the same way as your own report.</p>
+        </header>
+        <div ref={sampleFrameRef} className="flex h-[760px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] sm:h-[780px] lg:h-[720px]">
+          {samplePhase !== "ready" ? (
+            <div className="grid min-h-0 flex-1 place-items-center bg-night text-white" role="status" aria-live="polite">
+              <div className="flex flex-col items-center text-center">
+                <Logo size={34} tone="night" />
+                <p className="mt-5 font-mono text-[9px] uppercase tracking-[.2em] text-accent-lit">Opening your report</p>
+                <span className="mt-4 block h-1 w-28 overflow-hidden rounded-full bg-white/12" aria-hidden="true"><span className="sample-opening-progress block h-full rounded-full bg-accent-lit" /></span>
+              </div>
+            </div>
+          ) : <div className="sample-report-enter flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-5 border-b border-white/12 px-5 py-4 sm:px-8">
+            <div className="flex items-center gap-2.5"><Logo size={20} tone="night" /><span className="font-display text-lg text-white">Telescope</span></div>
+            <span className="font-mono text-[8px] uppercase tracking-[.17em] text-white/32">Sample report · fictional data</span>
+          </div>
+          <div className="relative min-h-0 flex-1 overflow-hidden p-6 sm:p-10 lg:p-12">
+            {moment ? (
+              <div key={moment.kind} className="result-stat-enter flex h-full min-h-0 flex-col">
+                <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>{moment.kicker}</span><span>{String(active + 1).padStart(2, "0")} / {String(pageCount).padStart(2, "0")}</span></div>
+                <div className="my-auto py-9"><h3 className="max-w-[18ch] font-display text-[clamp(2.2rem,4vw,4.25rem)] leading-[.92] tracking-[-.025em] text-white">{moment.title}</h3><p className="mt-6 max-w-[54ch] text-sm leading-relaxed text-white/48 sm:text-base">{moment.detail}</p></div>
+                <div className="border-t border-white/12 pt-6"><SampleReportGraphic kind={moment.kind} /></div>
+              </div>
+            ) : (
+              <div key="cover" className="result-stat-enter flex h-full min-h-0 flex-col">
+                <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>Conversation report</span><span>01 / {String(pageCount).padStart(2, "0")}</span></div>
+                <div className="my-auto py-12">
+                  <p className="font-mono text-[10px] uppercase tracking-[.2em] text-accent-lit">May 2019 — July 2026</p>
+                  <h3 className="mt-6 max-w-[11ch] font-display text-[clamp(4.5rem,11vw,10rem)] leading-[.74] tracking-[-.05em] text-white">Alice <span className="italic text-accent-lit">×</span> Bob</h3>
+                  <p className="mt-8 max-w-[40ch] text-base leading-relaxed text-white/48 sm:text-lg">Seven years of late nights, long silences, private language, and finding the thread again.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-px border-y border-white/12 bg-white/12 sm:grid-cols-3">
+                  <div className="bg-night py-4 pr-4"><span className="block font-display text-3xl text-white">18,426</span><span className="mt-1 block font-mono text-[8px] uppercase tracking-[.14em] text-white/28">messages</span></div>
+                  <div className="bg-night px-4 py-4"><span className="block font-display text-3xl text-white">7.2 years</span><span className="mt-1 block font-mono text-[8px] uppercase tracking-[.14em] text-white/28">observed</span></div>
+                  <div className="hidden bg-night py-4 pl-4 sm:block"><span className="block font-display text-3xl text-white">2 people</span><span className="mt-1 block font-mono text-[8px] uppercase tracking-[.14em] text-white/28">one conversation</span></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-5 border-t border-white/12 px-5 py-5 sm:px-8">
+            <div className="flex items-center gap-2" aria-label={`Page ${active + 1} of ${pageCount}`}>
+              {Array.from({ length: pageCount }, (_, index) => <button key={index} type="button" onClick={() => goTo(index)} aria-label={`Open sample report page ${index + 1}`} aria-current={index === active ? "page" : undefined} className={`h-1.5 rounded-full transition-all ${index === active ? "w-8 bg-accent-lit" : "w-3 bg-white/18 hover:bg-white/42"}`} />)}
+            </div>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => goTo(active - 1)} disabled={active === 0} className="grid h-10 w-10 place-items-center rounded-full border border-white/18 text-white/55 transition hover:border-white/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-20" aria-label="Previous sample report page">←</button>
+              <button type="button" onClick={() => active === pageCount - 1 ? goTo(0) : goTo(active + 1)} className="inline-flex h-10 items-center gap-3 rounded-full bg-accent-lit px-5 text-sm font-semibold text-night transition hover:bg-white">{active === 0 ? "Open report" : active === pageCount - 1 ? "Replay report" : "Next page"}<span aria-hidden="true">{active === pageCount - 1 ? "↻" : "→"}</span></button>
+            </div>
+          </div>
+          </div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const EXPORT_SCENES = [
+  { label: "Find export", caption: "In Telegram Desktop, open the conversation and choose Export chat history from the ⋮ menu." },
+  { label: "Choose JSON", caption: "Set the format to machine-readable JSON. Include stickers if you want their artwork in the report." },
+  { label: "Grab the folder", caption: "When Telegram finishes, choose the complete export folder in Telescope—not only result.json." },
+] as const;
+
+function ExportWalkthrough() {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % EXPORT_SCENES.length), 4200);
+    return () => window.clearInterval(timer);
+  }, [paused]);
+
+  return (
+    <section onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }} className="overflow-hidden rounded-[24px] border border-ink/12 bg-surface shadow-[0_18px_60px_rgba(14,22,33,.08)]" aria-label="Illustrated Telegram export walkthrough">
+      <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4 sm:px-6"><span className="font-mono text-[9px] uppercase tracking-[.16em] text-accent-deep">Telegram Desktop → Telescope</span><span className="font-mono text-[8px] uppercase tracking-[.14em] text-ink/35">{String(active + 1).padStart(2, "0")} / 03</span></div>
+      <div className="relative min-h-[330px] overflow-hidden bg-night p-5 text-white sm:min-h-[360px] sm:p-7 lg:aspect-[16/7] lg:min-h-0">
+        <div key={active} className="result-stat-enter h-full">
+          {active === 0 && <div className="grid h-full grid-cols-[28%_1fr] overflow-hidden rounded-xl border border-white/12 bg-[#172634]"><div className="border-r border-white/10 p-3"><span className="block h-6 rounded-md bg-white/10" /><div className="mt-4 space-y-2">{[0,1,2,3,4].map((item) => <span key={item} className={`block h-8 rounded-md ${item === 1 ? "bg-accent-lit/18" : "bg-white/[.045]"}`} />)}</div></div><div className="relative flex flex-col"><div className="flex h-14 items-center justify-between border-b border-white/10 px-4"><div><p className="text-xs font-semibold">Alice</p><p className="mt-0.5 text-[9px] text-white/32">last seen recently</p></div><span className="grid h-8 w-8 place-items-center rounded-full bg-accent-lit text-lg text-night">⋮</span></div><div className="m-auto space-y-2 opacity-45"><span className="block h-7 w-36 rounded-full bg-side-a/45" /><span className="ml-10 block h-7 w-32 rounded-full bg-side-b/45" /></div><div className="absolute right-4 top-12 w-44 overflow-hidden rounded-lg border border-white/12 bg-[#243545] p-1 shadow-2xl"><p className="rounded-md px-3 py-2 text-[10px] text-white/55">View profile</p><p className="rounded-md bg-accent-lit px-3 py-2 text-[10px] font-semibold text-night">Export chat history</p><p className="rounded-md px-3 py-2 text-[10px] text-white/55">Clear history</p></div></div></div>}
+          {active === 1 && <div className="mx-auto grid h-full w-full max-w-[440px] grid-rows-[auto_minmax(0,1fr)_auto] rounded-xl border border-white/12 bg-[#172634] p-5 sm:p-6"><div className="border-b border-white/10 pb-4"><p className="font-display text-2xl">Export chat history</p><p className="mt-1 text-[10px] text-white/38">Choose what Telegram should include.</p></div><div className="min-h-0 overflow-y-auto"><div className="grid min-h-full content-center gap-3 py-3"><div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3"><span className="text-xs text-white/62">Format</span><span className="rounded-full bg-accent-lit px-3 py-1 text-right font-mono text-[8px] uppercase tracking-[.1em] text-night">Machine-readable JSON ✓</span></div>{[["Photos", false], ["Video files", false], ["Stickers", true]].map(([label, checked]) => <div key={String(label)} className="flex items-center justify-between gap-3 text-xs text-white/58"><span>{label}</span><span className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${checked ? "border-accent-lit bg-accent-lit text-night" : "border-white/20"}`}>{checked ? "✓" : ""}</span></div>)}</div></div><div className="flex shrink-0 justify-end border-t border-white/10 pt-3"><span className="rounded-full bg-accent-lit px-5 py-2 text-xs font-semibold text-night">Export</span></div></div>}
+          {active === 2 && <div className="grid h-full items-center gap-6 sm:grid-cols-[1fr_auto_1fr]"><div className="rounded-xl border border-white/12 bg-[#172634] p-5"><div className="flex items-center gap-3"><span className="text-4xl text-warn">▰</span><div><p className="text-sm font-semibold">ChatExport_2026-08-21</p><p className="mt-1 text-[9px] text-white/32">Complete Telegram export</p></div></div><div className="mt-5 space-y-2 border-t border-white/10 pt-4 font-mono text-[9px] text-white/48"><p>⌑ result.json</p><p>▸ stickers/</p><p>▸ video_files/</p></div></div><span className="text-center text-2xl text-accent-lit max-sm:rotate-90">→</span><div className="grid min-h-[160px] place-items-center rounded-xl border-2 border-dashed border-accent-lit/65 bg-accent-lit/[.07] p-5 text-center"><div><span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-accent-lit text-xl text-night">↗</span><p className="mt-4 font-display text-2xl">Choose the folder</p><p className="mt-1 text-[9px] text-white/36">Telescope reads result.json inside it</p></div></div></div>}
+        </div>
+      </div>
+      <div className="p-5 sm:p-6 lg:p-5"><p className="min-h-[48px] text-sm leading-relaxed text-ink/62">{EXPORT_SCENES[active].caption}</p><div className="mt-5 grid grid-cols-3 border-t border-ink/10 lg:mt-3">{EXPORT_SCENES.map((scene, index) => <button key={scene.label} type="button" aria-pressed={index === active} onClick={() => setActive(index)} className={`border-t-2 px-2 pt-3 text-left text-[10px] font-semibold transition ${index === active ? "border-accent text-ink" : "border-transparent text-ink/35 hover:text-ink/65"}`}><span className="mr-1 font-mono text-[8px] text-accent-deep">0{index + 1}</span> {scene.label}</button>)}</div></div>
     </section>
   );
 }
@@ -796,6 +1101,43 @@ function Landing({
   inputRef: React.RefObject<HTMLInputElement | null>;
   viewer: Viewer;
 }) {
+  const [dropHighlighted, setDropHighlighted] = useState(false);
+  const [privacyVisible, setPrivacyVisible] = useState(false);
+  const privacyRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!dropHighlighted) return;
+    const timer = window.setTimeout(() => setDropHighlighted(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [dropHighlighted]);
+
+  useEffect(() => {
+    const section = privacyRef.current;
+    if (!section || privacyVisible) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setPrivacyVisible(true);
+        observer.disconnect();
+      },
+      { threshold: 0.22 },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [privacyVisible]);
+
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
+  const highlightDropZone = () => {
+    setDropHighlighted(false);
+    window.requestAnimationFrame(() => setDropHighlighted(true));
+  };
+
   return (
     <main className="min-h-dvh bg-surface">
       <section className="starfield relative min-h-dvh overflow-hidden bg-night text-white">
@@ -813,29 +1155,46 @@ function Landing({
                 <form action={signOutCurrentUser}><button className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35 hover:text-white">Sign out</button></form>
               </>
             ) : (
-              <Link href={applicationUrl("/sign-in")} className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent-lit hover:text-white">Log in / sign up</Link>
+              <Link href={applicationUrl("/sign-in")} aria-label="Log in or sign up" className="grid h-10 w-10 place-items-center text-accent-lit transition hover:text-white sm:block sm:h-auto sm:w-auto sm:font-mono sm:text-[10px] sm:uppercase sm:tracking-[0.16em]">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="8" r="3.25" /><path d="M5.75 19c.55-3.25 2.7-5 6.25-5s5.7 1.75 6.25 5" strokeLinecap="round" /></svg>
+                <span className="hidden sm:inline">Log in / sign up</span>
+              </Link>
             )}
           </div>
         </header>
 
-        <div className="relative z-[1] grid min-h-[calc(100dvh-72px)] items-center gap-10 px-5 py-10 sm:px-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.72fr)] xl:gap-14 xl:px-16 2xl:px-24">
+        <div className="relative z-[1] grid min-h-[calc(100dvh-72px)] items-center justify-items-start gap-6 px-5 py-6 text-left sm:gap-10 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.72fr)] lg:justify-items-stretch xl:gap-14 xl:px-16 2xl:px-24">
           <div className="relative z-10 max-w-[760px]">
             <p className="rise font-mono text-[10px] uppercase tracking-[0.2em] text-accent-lit" style={{ animationDelay: "80ms" }}>
-              A private instrument for one conversation
+              <span className="sm:hidden">A private lens for one chat</span>
+              <span className="hidden sm:inline">A private instrument for one conversation</span>
             </p>
-            <p className="rise mt-5 font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em]" style={{ animationDelay: "140ms" }}>
+            <p className="rise mt-5 hidden font-display text-[clamp(4rem,8vw,8.5rem)] leading-[0.72] tracking-[-0.045em] sm:block" style={{ animationDelay: "140ms" }}>
               Telescope:
             </p>
-            <h1 className="rise mt-9 max-w-[760px] font-display text-[clamp(2.15rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white" style={{ animationDelay: "220ms" }}>
-              See the conversation<br />
-              <span className="italic text-accent-lit">you were too close to notice.</span>
+            <h1 className="rise mt-5 max-w-[760px] font-display text-[clamp(2.5rem,4.2vw,4.8rem)] leading-[0.96] tracking-[-0.02em] text-white sm:mt-9" style={{ animationDelay: "220ms" }}>
+              <span className="lg:hidden">See the conversation <span className="block italic text-accent-lit">you were too close to notice.</span></span>
+              <span className="hidden lg:block">See the conversation<ShufflingHeroEnding /></span>
             </h1>
             <p className="rise mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]" style={{ animationDelay: "300ms" }}>
               Drop one Telegram chat. Get its rhythms, silences, private language, and the parts that only appear when years are seen at once.
             </p>
+            <div className="rise mt-8 hidden lg:block" style={{ animationDelay: "380ms" }}>
+              <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <button type="button" onClick={highlightDropZone} className="rounded-full bg-accent-lit px-6 py-3 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-night">
+                  Analyze your chat
+                </button>
+                <button type="button" onClick={() => scrollToSection("what-comes-back")} className="rounded-full border border-white/22 px-6 py-3 text-sm font-semibold text-white/72 transition hover:-translate-y-0.5 hover:border-white/55 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-night">
+                  See a sample report
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="rise grid w-full max-w-[560px] justify-self-end gap-5" style={{ animationDelay: "300ms" }}>
+          <CompactHeroSampleReading />
+
+          <div className="rise grid w-full max-w-[560px] justify-self-start gap-5 lg:justify-self-end" style={{ animationDelay: "300ms" }}>
+          <div className="hidden lg:block"><HeroSampleReading /></div>
           <div id="drop" className="scroll-mt-4">
           <label
             onDragOver={(e) => {
@@ -848,7 +1207,7 @@ function Landing({
               setDragging(false);
               void filesFromDrop(e.dataTransfer).then((files) => { if (files.length) void onFiles(files); });
             }}
-            className={`drop-zone group relative grid min-h-[164px] cursor-pointer gap-5 overflow-hidden rounded-[22px] border-2 px-6 py-6 transition-all sm:grid-cols-[auto_1fr] sm:items-center sm:px-8 ${
+            className={`drop-zone group relative grid min-h-[164px] w-full cursor-pointer gap-5 overflow-hidden rounded-[22px] border-2 px-6 py-6 text-left transition-all sm:grid-cols-[auto_1fr] sm:items-center sm:px-8 ${dropHighlighted ? "drop-zone-attention" : ""} ${
               dragging ? "scale-[1.01] border-accent-lit bg-accent-lit/16" : "border-accent-lit/55 bg-white/[0.055] hover:border-accent-lit hover:bg-white/[0.08]"
             }`}
           >
@@ -862,7 +1221,7 @@ function Landing({
                 if (files.length) void onFiles(files);
               }}
             />
-            <span className={`relative z-10 grid h-14 w-14 shrink-0 place-items-center rounded-full border transition duration-300 sm:h-16 sm:w-16 ${dragging ? "rotate-[-8deg] border-accent-lit bg-accent-lit text-night" : "border-accent-lit/70 bg-accent-lit/10 text-accent-lit group-hover:-translate-y-1 group-hover:bg-accent-lit group-hover:text-night"}`}>
+            <span className={`relative z-10 grid size-[clamp(2.25rem,6vw,4rem)] shrink-0 place-items-center rounded-full border transition duration-300 ${dragging ? "rotate-[-8deg] border-accent-lit bg-accent-lit text-night" : "border-accent-lit/70 bg-accent-lit/10 text-accent-lit group-hover:-translate-y-1 group-hover:bg-accent-lit group-hover:text-night"}`}>
               <span className="text-2xl">↗</span>
             </span>
             <div className="relative z-10 min-w-0">
@@ -875,7 +1234,7 @@ function Landing({
             <div className="relative z-10 flex flex-wrap items-center gap-x-5 gap-y-2 sm:col-start-2">
               <span className="text-xs text-white/45">One 1:1 chat · any length</span>
               <span className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.14em] text-safe-lit"><Shield /> never uploaded</span>
-              <a href="#export" className="text-xs text-accent-lit underline decoration-accent-lit/35 underline-offset-4 transition hover:text-white">How do I export the folder?</a>
+              <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); scrollToSection("export"); }} className="text-xs text-accent-lit underline decoration-accent-lit/35 underline-offset-4 transition hover:text-white">How do I export the folder?</button>
             </div>
           </label>
 
@@ -890,9 +1249,9 @@ function Landing({
       <div id="what-comes-back" className="scroll-mt-0"><ReportShowcase /></div>
 
       {/* privacy */}
-      <section className="starfield relative overflow-hidden bg-night px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
+      <section ref={privacyRef} className="starfield relative overflow-hidden bg-night px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
         <div className="relative grid gap-14 lg:grid-cols-2">
-          <div>
+          <div className={privacyVisible ? "privacy-section-enter" : "opacity-0"}>
             <Kicker tone="lit" className="mb-5">
               The only promise that matters
             </Kicker>
@@ -923,7 +1282,7 @@ function Landing({
                 b: "One button, clearly labelled, sends the conversation to a model to be read. Don't press it and the report is still complete — just unnarrated.",
               },
             ].map((step) => (
-              <li key={step.n} className="flex gap-4 bg-white/5 p-6">
+              <li key={step.n} className={`${privacyVisible ? "privacy-section-enter" : "opacity-0"} flex gap-4 bg-white/5 p-6`} style={{ animationDelay: `${160 + Number(step.n) * 110}ms` }}>
                 <span className="font-display text-[26px] leading-none text-accent-lit">{step.n}</span>
                 <div>
                   <p className="mb-1.5 font-semibold text-white">{step.h}</p>
@@ -931,7 +1290,7 @@ function Landing({
                 </div>
               </li>
             ))}
-            <li className="flex items-center gap-2.5 bg-safe/18 px-6 py-4">
+            <li className={`${privacyVisible ? "privacy-section-enter" : "opacity-0"} flex items-center gap-2.5 bg-safe/18 px-6 py-4`} style={{ animationDelay: "620ms" }}>
               <span className="block h-[7px] w-[7px] rounded-full bg-safe-lit" />
               <span className="font-mono text-[11.5px] tracking-wide text-safe-lit">
                 raw chat stays local · saved results are account-only
@@ -942,31 +1301,19 @@ function Landing({
       </section>
 
       {/* how to export */}
-      <div id="export" className="scroll-mt-6 bg-shade px-5 py-16 sm:px-10 xl:px-16 2xl:px-24">
-        <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
-          <div>
-            <Kicker tone="deep" className="mb-3">Step 1 · get the folder</Kicker>
-            <h2 className="font-display text-[31px] leading-tight text-ink sm:text-[38px]">
-              Telegram hands out your history if you ask nicely.
-            </h2>
-            <p className="mt-4 max-w-[42ch] text-[15px] leading-relaxed text-ink/65">
-              One folder, one chat. Choose the complete Telegram export folder and Telescope automatically reads the conversation and any sticker artwork inside it.
-            </p>
-          </div>
-          <Panel tone="surface" className="flex flex-col gap-3.5">
-            {[
-              ["01", "Open Telegram Desktop — the phone app can't export."],
-              ["02", "Open the chat → ⋮ → Export chat history."],
-              ["03", "Set the format to machine-readable JSON. Include stickers if you want their artwork shown."],
-              ["04", "Telegram waits 24 hours the first time you ask. Sorry — that one's theirs."],
-              ["05", "Choose or drop the complete export folder at the top of this page."],
-            ].map(([n, text]) => (
-              <div key={n} className="flex gap-3.5">
-                <span className="pt-0.5 font-mono text-[11px] text-accent-deep">{n}</span>
-                <span className="text-[14.5px] leading-relaxed text-ink/75">{text}</span>
-              </div>
-            ))}
-          </Panel>
+      <div id="export" className="scroll-mt-0 bg-shade px-5 py-16 sm:px-10 lg:flex lg:min-h-dvh lg:flex-col lg:justify-center lg:py-7 xl:px-16 2xl:px-24">
+        <div className="mx-auto w-full max-w-[840px] sm:border-b sm:border-ink/12 sm:pb-8 lg:pb-6">
+          <Kicker tone="deep" className="mb-3">Get the folder</Kicker>
+          <h2 className="max-w-[840px] font-display text-[31px] leading-tight text-ink sm:text-[38px]">
+            Telegram hands out your history if you ask nicely.
+          </h2>
+          <p className="mt-4 max-w-[62ch] text-[15px] leading-relaxed text-ink/65">
+            Export one chat as JSON, then bring the whole folder to Telescope.
+          </p>
+        </div>
+        <div className="mx-auto mt-7 w-full max-w-[860px] sm:mt-10 lg:mt-7">
+          <ExportWalkthrough />
+          <p className="mt-5 text-center font-display text-xl italic text-ink/58 lg:mt-3">First export? Telegram may make you wait 24 hours. That one&rsquo;s on them.</p>
         </div>
       </div>
 
@@ -983,9 +1330,9 @@ function Landing({
           <br />
           Somebody should look at it.
         </h2>
-        <a href="#drop" className="mt-1.5">
+        <button type="button" onClick={() => inputRef.current?.click()} className="mt-1.5">
           <Pill>Point it at a chat</Pill>
-        </a>
+        </button>
         <p className="font-mono text-[11.5px] text-ink/50">
           no account · no upload · the numbers take about a second
         </p>
@@ -1022,8 +1369,8 @@ function Landing({
             </div>
           </div>
           <div className="flex flex-wrap justify-between gap-3 pt-5 font-mono text-[11px] tracking-wider text-white/40">
-            <span>Telescope</span>
-            <span>◎ built local-first</span>
+            <span suppressHydrationWarning>© {new Date().getFullYear()} Telescope</span>
+            <span>Made for looking back</span>
           </div>
         </div>
       </footer>

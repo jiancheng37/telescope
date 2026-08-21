@@ -171,6 +171,37 @@ body {
 .result-stat-progress { animation: result-stat-progress 3.6s linear both; }
 .result-showcase-progress { animation: result-stat-progress 4.2s linear both; }
 
+@keyframes drop-zone-attention {
+  0%, 100% { border-color: rgba(42, 171, 238, 0.55); box-shadow: 0 0 0 0 rgba(42, 171, 238, 0); }
+  35% { border-color: rgba(42, 171, 238, 1); box-shadow: 0 0 0 7px rgba(42, 171, 238, 0.14), 0 18px 60px rgba(42, 171, 238, 0.16); }
+}
+.drop-zone-attention { animation: drop-zone-attention 900ms cubic-bezier(.16, 1, .3, 1) both; }
+
+@keyframes privacy-section-enter {
+  from { opacity: 0; transform: translateY(22px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.privacy-section-enter { animation: privacy-section-enter 700ms cubic-bezier(.16, 1, .3, 1) both; }
+
+@keyframes sample-report-enter {
+  from { opacity: 0; transform: scale(.985) translateY(12px); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.sample-report-enter { animation: sample-report-enter 800ms cubic-bezier(.16, 1, .3, 1) both; }
+
+@keyframes sample-opening-progress {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.sample-opening-progress { animation: sample-opening-progress 1500ms linear both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-zone-attention { animation: none; border-color: var(--color-accent-lit); }
+  .privacy-section-enter { animation: none; opacity: 1; transform: none; filter: none; }
+  .sample-report-enter { animation: none; opacity: 1; transform: none; filter: none; }
+  .sample-opening-progress { animation-timing-function: steps(3, end); }
+}
+
 .cover-frame { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025); }
 
 /* Carry the cover's midnight material through report screens while preserving
