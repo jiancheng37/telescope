@@ -4,7 +4,11 @@ Description: Telescope asynchronous analysis worker (S3, SQS, ECR, and ECS Farga
 Parameters:
   WebOrigin:
     Type: String
-    Description: Production Telescope origin, for example https://telescope.example.com
+    Description: Public Telescope site origin, for example https://telescope.example.com
+  AppOrigin:
+    Type: String
+    Default: https://app.telescope.ink
+    Description: Authenticated Telescope app origin used for direct browser uploads
   WorkerImageTag:
     Type: String
     Default: initial
@@ -153,6 +157,7 @@ Resources:
           - AllowedMethods: [PUT]
             AllowedOrigins:
               - !Ref WebOrigin
+              - !Ref AppOrigin
               - http://localhost:3000
             AllowedHeaders: ["content-type"]
             ExposedHeaders: [etag]

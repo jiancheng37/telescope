@@ -18,7 +18,7 @@ Browser -> Vercel/Next.js -> Prisma Postgres
 
 [`infra/aws/analysis-stack.yml`](../infra/aws/analysis-stack.yml) creates:
 
-- a private, encrypted S3 bucket with CORS and one-day expiration;
+- a private, encrypted S3 bucket with CORS for both the public site and authenticated app origins, plus one-day expiration;
 - an encrypted SQS queue and dead-letter queue;
 - an ECR repository;
 - an ECS cluster, task definition, service, logs, and task roles;
