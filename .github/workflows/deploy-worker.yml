@@ -31,6 +31,7 @@ env:
   ECR_REPOSITORY: telescope-analysis-production-workerrepository-jzdnnnlsvcfs
   STACK_NAME: telescope-analysis-production
   DEPLOY_ROLE_ARN: arn:aws:iam::423623836663:role/telescope-analysis-github-deployer
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
 jobs:
   checks:
@@ -75,7 +76,7 @@ jobs:
           file: Dockerfile.worker
           platforms: linux/amd64
           push: true
-          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -86,7 +87,7 @@ jobs:
           --template-file infra/aws/analysis-stack.yml
           --capabilities CAPABILITY_NAMED_IAM
           --parameter-overrides
-          WorkerImageTag="${GITHUB_SHA}"
+          WorkerImageTag="$IMAGE_TAG"
           WorkerDesiredCount=1
           --tags
           Application=Telescope
