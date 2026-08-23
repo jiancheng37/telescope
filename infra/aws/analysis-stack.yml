@@ -137,6 +137,18 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeSubnets
                 Resource: "*"
+              # CloudFormation resolves queue attributes while updating IAM
+              # policies which reference the queue ARN. Keep this on the
+              # deployer itself so future stack updates do not need a manual
+              # bootstrap permission.
+              - Effect: Allow
+                Action: sqs:GetQueueAttributes
+                Resource: !Sub "arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:telescope-analysis-production-*"
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketCORS
+                  - s3:PutBucketCORS
+                Resource: !Sub "arn:${AWS::Partition}:s3:::telescope-analysis-production-*"
               - Effect: Allow
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseUrlSecretArn
