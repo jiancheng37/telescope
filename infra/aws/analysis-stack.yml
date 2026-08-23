@@ -108,6 +108,7 @@ Resources:
                   - cloudformation:DescribeChangeSet
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStacks
+                  - cloudformation:ContinueUpdateRollback
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:GetTemplate
                   - cloudformation:GetTemplateSummary
@@ -128,6 +129,8 @@ Resources:
                 Action:
                   - iam:GetRole
                   - iam:PassRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
                 Resource:
                   - !GetAtt WorkerExecutionRole.Arn
                   - !GetAtt WorkerTaskRole.Arn

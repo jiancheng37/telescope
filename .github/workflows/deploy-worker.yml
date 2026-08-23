@@ -80,6 +80,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Recover an interrupted stack rollback
+        run: |
+          status="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text)"
+          if [ "$status" = "UPDATE_ROLLBACK_FAILED" ]; then
+            aws cloudformation continue-update-rollback --stack-name "$STACK_NAME"
+            aws cloudformation wait stack-rollback-complete --stack-name "$STACK_NAME"
+          fi
+
       - name: Deploy worker through CloudFormation
         run: >-
           aws cloudformation deploy
