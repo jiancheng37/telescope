@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
@@ -13,6 +13,7 @@ import {
   dailyAnalysisLimit,
   maximumExportBytes,
 } from "@/lib/analysis-infrastructure";
+import { closeStaleAnalysisJobs } from "@/lib/analysis-job-maintenance";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -74,13 +75,49 @@ export async function POST(request: Request) {
   if (!report || report.kind !== requestedKind) {
     return NextResponse.json({ error: "That report cannot start AI analysis." }, { status: 409 });
   }
+  const abandonedUploads = await prisma.analysisJob.findMany({
+    where: { userId: session.user.id, status: "AWAITING_UPLOAD" },
+    select: { id: true, storageKey: true },
+  });
+  const replacedUploads: typeof abandonedUploads = [];
+  for (const job of abandonedUploads) {
+    const cancelled = await prisma.analysisJob.updateMany({
+      where: { id: job.id, userId: session.user.id, status: "AWAITING_UPLOAD" },
+      data: {
+        status: "CANCELLED",
+        stage: null,
+        error: "Replaced by a new analysis request.",
+        completedAt: new Date(),
+      },
+    });
+    if (cancelled.count === 1) replacedUploads.push(job);
+  }
+  if (replacedUploads.length > 0) {
+    await Promise.all(replacedUploads.map((job) => infrastructure.s3.send(new DeleteObjectCommand({
+      Bucket: infrastructure.bucket,
+      Key: job.storageKey,
+    })).catch((error) => {
+      console.error("[analysis-job] replaced upload cleanup failed", error);
+    })));
+  }
+  const staleJobs = await closeStaleAnalysisJobs();
+  await Promise.all(staleJobs.map((job) => infrastructure.s3.send(new DeleteObjectCommand({
+    Bucket: infrastructure.bucket,
+    Key: job.storageKey,
+  })).catch((error) => {
+    console.error("[analysis-job] stale upload cleanup failed", error);
+  })));
   const [active, recentJobs] = await Promise.all([
     prisma.analysisJob.findFirst({
       where: { userId: session.user.id, status: { in: ["AWAITING_UPLOAD", "QUEUED", "PROCESSING"] } },
       select: { id: true },
     }),
     prisma.analysisJob.count({
-      where: { userId: session.user.id, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1_000) } },
+      where: {
+        userId: session.user.id,
+        status: "COMPLETE",
+        completedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1_000) },
+      },
     }),
   ]);
   if (active) {

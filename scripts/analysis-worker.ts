@@ -12,7 +12,10 @@ import { toWire } from "../src/ui/wire";
 import { completeGroupReport, completeReport } from "../src/lib/reports";
 import { prisma } from "../src/lib/prisma";
 import { analysisInfrastructure, maximumExportBytes } from "../src/lib/analysis-infrastructure";
-import { closeStaleAnalysisJobs } from "../src/lib/analysis-job-maintenance";
+import {
+  clearExpiredFailedAnalysisJobs,
+  closeStaleAnalysisJobs,
+} from "../src/lib/analysis-job-maintenance";
 import * as Sentry from "@sentry/node";
 
 const MAX_ATTEMPTS = 3;
@@ -147,6 +150,12 @@ async function main() {
         for (const stale of staleJobs) {
           await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: stale.storageKey }));
           console.warn(`[analysis-worker] job ${stale.id} closed as stale (${stale.previousStatus})`);
+        }
+        const failedJobs = await clearExpiredFailedAnalysisJobs();
+        for (const failed of failedJobs) {
+          await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: failed.storageKey }))
+            .catch((error) => console.error("[analysis-worker] expired failed export cleanup failed", error));
+          console.log(`[analysis-worker] expired failed job ${failed.id} cleared`);
         }
       } catch (error) {
         console.error("[analysis-worker] stale job cleanup failed", error);

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 const QUEUED_TIMEOUT_MS = 45 * 60 * 1_000;
 const PROCESSING_TIMEOUT_MS = 90 * 60 * 1_000;
+export const FAILED_ANALYSIS_JOB_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
 export type StaleAnalysisJob = {
   id: string;
@@ -52,4 +53,35 @@ export async function closeStaleAnalysisJobs(now = new Date()): Promise<StaleAna
     }
   }
   return closed;
+}
+
+export type ClearedFailedAnalysisJob = {
+  id: string;
+  storageKey: string;
+};
+
+/**
+ * Remove failed job records after their retry/error state has had time to be
+ * shown to the user. Reports are retained and are already returned to COMPLETE
+ * when a job enters FAILED, so they remain available for another attempt.
+ */
+export async function clearExpiredFailedAnalysisJobs(
+  now = new Date(),
+): Promise<ClearedFailedAnalysisJob[]> {
+  const completedBefore = new Date(now.getTime() - FAILED_ANALYSIS_JOB_RETENTION_MS);
+  const candidates = await prisma.analysisJob.findMany({
+    where: { status: "FAILED", completedAt: { lte: completedBefore } },
+    select: { id: true, storageKey: true },
+    orderBy: { completedAt: "asc" },
+    take: 100,
+  });
+
+  const cleared: ClearedFailedAnalysisJob[] = [];
+  for (const job of candidates) {
+    const deleted = await prisma.analysisJob.deleteMany({
+      where: { id: job.id, status: "FAILED", completedAt: { lte: completedBefore } },
+    });
+    if (deleted.count === 1) cleared.push(job);
+  }
+  return cleared;
 }
