@@ -1,0 +1,34 @@
+name: Repair production upload CORS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-southeast-1
+  DEPLOY_ROLE_ARN: arn:aws:iam::423623836663:role/telescope-analysis-github-deployer
+  UPLOAD_BUCKET: telescope-analysis-production-uploadbucket-qus5jgrk5jgy
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Allow Telescope browser uploads
+        run: >-
+          aws s3api put-bucket-cors
+          --bucket "$UPLOAD_BUCKET"
+          --cors-configuration '{"CORSRules":[{"AllowedHeaders":["content-type"],"AllowedMethods":["PUT"],"AllowedOrigins":["https://telescope.ink","https://app.telescope.ink","http://localhost:3000"],"ExposeHeaders":["etag"],"MaxAgeSeconds":900}]}'
+      - name: Verify the stored CORS rule
+        run: >-
+          aws s3api get-bucket-cors
+          --bucket "$UPLOAD_BUCKET"
+          --query 'CORSRules[0].AllowedOrigins'
+          --output text
