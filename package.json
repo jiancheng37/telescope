@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then CONFIRM_PRODUCTION_MIGRATION=1 npm run db:migrate:production; fi && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
