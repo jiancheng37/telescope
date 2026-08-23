@@ -43,6 +43,7 @@ model User {
   emailVerified DateTime? @map("email_verified")
   image         String?
   reportName    String?   @map("report_name")
+  telegramSenderId String? @map("telegram_sender_id")
   accounts      Account[]
   sessions      Session[]
   reports       Report[]
@@ -66,18 +67,25 @@ enum ReportStatus {
   COMPLETE
 }
 
+enum ReportKind {
+  DIRECT
+  GROUP
+}
+
 model Report {
   id           String       @id @default(cuid())
   userId       String       @map("user_id")
   chatId       String?      @map("chat_id")
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   status       ReportStatus @default(PROCESSING)
+  kind         ReportKind   @default(DIRECT)
   title        String
   participantA String       @map("participant_a")
   participantB String       @map("participant_b")
   firstTs      Int          @map("first_ts")
   lastTs       Int          @map("last_ts")
   messageCount Int          @default(0) @map("message_count")
+  participantCount Int      @default(2) @map("participant_count")
   hasAiInsights Boolean     @default(false) @map("has_ai_insights")
   analysis     Json?
   llm          Json?

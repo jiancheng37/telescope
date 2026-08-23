@@ -1,11 +1,10 @@
 # Telescope
 
-What a year of one conversation actually looked like.
+What years of a conversation actually looked like.
 
-Telescope reads a Telegram 1:1 chat export and turns it into a deck of full-screen
-cards: who talks more, who waits longer, when it went quiet and who broke the
-silence, which words are characteristic of each of you rather than merely frequent.
-It ends on one line — six-ish words for the dynamic between the two of you.
+Telescope reads Telegram 1-to-1 and group chat exports and turns them into decks
+of full-screen findings. Direct reports compare two voices; group reports map
+participation, rhythms, reply networks, language, roles, themes, and dynamics.
 
 ## The two halves
 
@@ -22,9 +21,8 @@ sampled corpus, and every quote it cites is checked against the real messages
 before it renders — unsupported readings are dropped rather than shown. Three
 calls over one cached prompt prefix: read, propose, judge.
 
-Two rules the UI keeps everywhere: a number without a per-person version is a
-warm-up card, not a finding, and a quote is always shown as the whole message with
-the cited fragment marked inside it, never clipped to the fragment.
+The UI keeps every claim tied to something measured or cited. Unsupported model
+readings are dropped rather than presented as fact.
 
 ## Where your data goes
 

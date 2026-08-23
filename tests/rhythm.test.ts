@@ -9,6 +9,7 @@ import {
   replyLatency,
   revival,
   silences,
+  weekdayHistogram,
 } from "../src/domain/rhythm";
 import type { Message, RawMessage } from "../src/domain/types";
 import { DAY, T0, at, makeExport, msg, resetIds } from "./fixture";
@@ -139,6 +140,21 @@ describe("hourHistogram and lateNightShare", () => {
 
   it("returns 0 rather than NaN for a side that never spoke", () => {
     expect(lateNightShare({ a: new Array(24).fill(0), b: new Array(24).fill(0) })).toEqual({ a: 0, b: 0 });
+  });
+});
+
+describe("weekdayHistogram", () => {
+  it("buckets messages by local weekday per side", () => {
+    const monday = new Date(2025, 0, 6, 12).getTime() / 1000;
+    const tuesday = new Date(2025, 0, 7, 12).getTime() / 1000;
+    const hist = weekdayHistogram(normalize([
+      msg({ at: monday, from: "alice", text: "a" }),
+      msg({ at: monday + 60, from: "bob", text: "b" }),
+      msg({ at: tuesday, from: "alice", text: "c" }),
+    ]));
+    expect(hist.a[1]).toBe(1);
+    expect(hist.b[1]).toBe(1);
+    expect(hist.a[2]).toBe(1);
   });
 });
 

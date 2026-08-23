@@ -16,6 +16,7 @@ export {
   replyLatency,
   monologues,
   hourHistogram,
+  weekdayHistogram,
   lateNightShare,
   silences,
   revival,

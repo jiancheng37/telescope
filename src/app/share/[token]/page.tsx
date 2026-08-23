@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import type { Analysis } from "@/domain/types";
+import type { GroupAnalysis } from "@/domain/group";
 import type { WirePayload } from "@/ui/wire";
 import { buildDeck } from "@/ui/cards";
 import { Report, type LocalExtremeEvidence, type LocalStreakMessage } from "@/ui/Report";
 import { ReportActions } from "@/ui/ReportActions";
+import { GroupReport, type LocalGroupExtremeEvidence, type LocalGroupMessage } from "@/ui/GroupReport";
+import type { GroupAiPayload } from "@/llm/group";
 
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -26,8 +29,15 @@ function hideMessageExcerpts(llm: WirePayload): WirePayload {
 
 export default async function SharedReportPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const saved = await prisma.report.findFirst({ where: { OR: [{ shareToken: token }, { shareMessagesToken: token }] }, select: { analysis: true, llm: true, participantA: true, participantB: true, shareToken: true, shareMessagesToken: true, sharedMessagesVisible: true, sharedEvidence: true, user: { select: { reportName: true, name: true } } } });
+  const saved = await prisma.report.findFirst({ where: { OR: [{ shareToken: token }, { shareMessagesToken: token }] }, select: { kind: true, analysis: true, llm: true, participantA: true, participantB: true, shareToken: true, shareMessagesToken: true, sharedMessagesVisible: true, sharedEvidence: true, user: { select: { reportName: true, name: true } } } });
   if (!saved?.analysis) notFound();
+  if (saved.kind === "GROUP") {
+    const messagesVisible = saved.shareMessagesToken === token;
+    const evidence = messagesVisible && saved.sharedEvidence && typeof saved.sharedEvidence === "object" ? saved.sharedEvidence as { groupAiEvidence?: LocalGroupMessage[]; groupExtremeEvidence?: LocalGroupExtremeEvidence } : null;
+    const storedGroupAi = saved.llm ? saved.llm as unknown as GroupAiPayload : null;
+    const groupAi = storedGroupAi && !messagesVisible ? { ...storedGroupAi, wildTexts: [] } : storedGroupAi;
+    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={groupAi} aiEvidence={evidence?.groupAiEvidence} extremeEvidence={evidence?.groupExtremeEvidence} backHref="/" returnLabel="Home" visibilityLabel={messagesVisible ? "Shared group report · evidence included" : "Shared group report · messages hidden"} coverActions={<ReportActions publicPath={`/share/${token}`} />} />;
+  }
   const analysis = saved.analysis as unknown as Analysis;
   analysis.chat.participants = [saved.participantA, saved.user.reportName?.trim() || saved.user.name?.trim() || saved.participantB];
   const messagesVisible = saved.shareMessagesToken === token || (saved.shareToken === token && saved.sharedMessagesVisible);

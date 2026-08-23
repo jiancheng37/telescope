@@ -1,4 +1,4 @@
-import { mean, median } from "./stats";
+import { maximum, mean, median } from "./stats";
 import type { Chapter, Episode, EraChange, EraChangeChannel, Message, Session, Side } from "./types";
 
 /** A silence this long ends a session. Bursts, not days. */
@@ -257,7 +257,7 @@ export function summarizeSessions(sessions: Session[]) {
     count: sessions.length,
     medianMessages: median(sizes),
     meanMessages: mean(sizes),
-    maxMessages: sizes.length ? Math.max(...sizes) : 0,
+    maxMessages: maximum(sizes),
     medianDurationMin: median(sessions.map((s) => s.durationMin)),
     monologueSessions: sessions.filter((s) => s.monologue).length,
     opens,
@@ -325,7 +325,9 @@ export function buildChapters(messages: Message[], weekSemantics: WeekSemantics[
   }
   // Anything trailing at the end has nothing to attach to; keep it as an era so
   // no messages disappear from the timeline entirely.
-  if (blocks.length === 0) blocks.push(...allBlocks);
+  if (blocks.length === 0) {
+    for (const block of allBlocks) blocks.push(block);
+  }
   else if (pendingBlips.length) blocks.push(pendingBlips.flat());
 
   const chapters: Chapter[] = [];

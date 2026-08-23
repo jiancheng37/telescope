@@ -202,6 +202,12 @@ body {
 }
 .result-stat-enter { animation: result-stat-in 480ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+@keyframes export-walkthrough-in {
+  from { opacity: 0; transform: translateY(20px); filter: blur(5px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+.export-walkthrough-enter { animation: export-walkthrough-in 760ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
 @keyframes result-stat-progress {
   from { width: 0; }
   to { width: 100%; }
@@ -316,10 +322,16 @@ body {
 .report-action-button:hover { border-color: var(--color-accent-lit); color: white; transform: translateY(-1px); }
 .report-action-button:disabled { cursor: wait; opacity: 0.5; }
 main[aria-label="Your conversation report"]:has([role="dialog"]) .report-back-button,
-main[aria-label="Your conversation report"]:has([role="dialog"]) .report-cover-actions .report-action-button {
+main[aria-label="Your conversation report"]:has([role="dialog"]) .report-cover-actions .report-action-button,
+main[aria-label="Your group chat report"]:has([role="dialog"]) .report-back-button,
+main[aria-label="Your group chat report"]:has([role="dialog"]) .report-cover-actions .report-action-button {
   filter: blur(5px);
   opacity: 0.35;
   pointer-events: none;
+}
+main[aria-label="Your conversation report"] .wrapped-screen:has([role="dialog"]),
+main[aria-label="Your group chat report"] .wrapped-screen:has([role="dialog"]) {
+  z-index: 60;
 }
 .report-actions-light .report-action-button {
   border-color: color-mix(in srgb, var(--color-ink) 24%, transparent);
@@ -510,11 +522,22 @@ main[aria-label="Your conversation report"]:has([role="dialog"]) .report-cover-a
 .era-scroll {
   overflow-x: auto;
   overflow-y: hidden;
+  touch-action: pan-x;
   overscroll-behavior-x: contain;
   scrollbar-color: rgba(42,171,238,.5) rgba(23,33,43,.08);
   scrollbar-width: thin;
   scroll-snap-type: x proximity;
   padding-bottom: 10px;
+}
+.wild-quote-frame {
+  width: 100%;
+  scrollbar-color: rgba(42,171,238,.45) transparent;
+  scrollbar-width: thin;
+}
+.wild-quote-frame > h2 { overflow-wrap: anywhere; }
+.group-report-scroll {
+  scrollbar-color: rgba(42,171,238,.5) rgba(255,255,255,.06);
+  scrollbar-width: thin;
 }
 .era-timeline {
   --era-count: 1;
@@ -613,6 +636,7 @@ main[aria-label="Your conversation report"]:has([role="dialog"]) .report-cover-a
   .rise,
   .drift,
   .report-reveal,
+  .export-walkthrough-enter,
   .loading-orbit {
     animation: none;
   }

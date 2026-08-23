@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { Analysis, Chapter, Message } from "../domain/types";
 import type { Parsed } from "../domain/parse";
+import type { ParsedGroup } from "../domain/group";
 import { buildChapters, SESSION_GAP_MIN, weekStart, type WeekSemantics } from "../domain/sessions";
 
 const EMBEDDING_MODEL = process.env.TELESCOPE_EMBEDDING_MODEL ?? "text-embedding-3-small";
@@ -22,6 +23,66 @@ export interface SemanticEraResult {
   inputTokens: number;
   calls: number;
   model: string;
+}
+
+export async function buildGroupSemanticEras(
+  parsed: ParsedGroup,
+  client: OpenAI,
+  onProgress: (note: string) => void,
+): Promise<SemanticEraResult> {
+  if (!parsed.messages.length) return { chapters: [], representativeMessageIds: [], inputTokens: 0, calls: 0, model: EMBEDDING_MODEL };
+  const groups: Array<typeof parsed.messages> = [[parsed.messages[0]]];
+  for (const message of parsed.messages.slice(1)) {
+    const current = groups[groups.length - 1];
+    if (message.ts - current[current.length - 1].ts > SESSION_GAP_MIN * 60) groups.push([message]);
+    else current.push(message);
+  }
+  const names = new Map(parsed.participants.map((person) => [person.id, person.name]));
+  const prepared = groups.map((messages) => {
+    const rendered = messages.map((message) => `${names.get(message.participantId) ?? "Unknown"}: ${message.text.trim() || (message.mediaType === "sticker" ? `[sticker ${message.stickerEmoji ?? ""}]` : message.media ? "[media]" : "")}`).join("\n");
+    const half = Math.floor((MAX_SESSION_CHARS - 30) / 2);
+    const text = rendered.length <= MAX_SESSION_CHARS ? rendered : `${rendered.slice(0, half)}\n[session shortened]\n${rendered.slice(-half)}`;
+    return { messages, text };
+  }).filter((item) => item.text.trim());
+  const embedded: EmbeddedSession[] = [];
+  let inputTokens = 0;
+  let calls = 0;
+  onProgress(`mapping ${prepared.length.toLocaleString()} group sessions into weekly themes`);
+  for (let offset = 0; offset < prepared.length; offset += BATCH_SIZE) {
+    const batch = prepared.slice(offset, offset + BATCH_SIZE);
+    const response = await client.embeddings.create({ model: EMBEDDING_MODEL, input: batch.map((item) => item.text), encoding_format: "float", dimensions: 256 });
+    calls++;
+    inputTokens += response.usage?.prompt_tokens ?? response.usage?.total_tokens ?? 0;
+    response.data.forEach((datum, index) => {
+      const source = batch[index];
+      if (!source) return;
+      embedded.push({ startTs: source.messages[0].ts, endTs: source.messages[source.messages.length - 1].ts, firstMessageId: source.messages[0].id, lastMessageId: source.messages[source.messages.length - 1].id, weight: Math.max(1, Math.min(source.text.length, MAX_SESSION_CHARS)), embedding: datum.embedding });
+    });
+  }
+  const byWeek = new Map<number, EmbeddedSession[]>();
+  for (const session of embedded) {
+    const key = weekStart(session.startTs);
+    const found = byWeek.get(key);
+    if (found) found.push(session); else byWeek.set(key, [session]);
+  }
+  const semantics: WeekSemantics[] = [...byWeek].map(([weekTs, sessions]) => ({ weekTs, embedding: weightedMean(sessions) }));
+  const primaryId = parsed.participants[0]?.id;
+  const binaryMessages: Message[] = parsed.messages.map((message) => ({
+    id: message.id, ts: message.ts, who: message.participantId === primaryId ? 0 : 1, text: message.text,
+    mediaType: message.mediaType, attachment: message.media && !message.mediaType ? "file" : undefined,
+    stickerEmoji: message.stickerEmoji, assetPath: message.assetPath, isReply: message.replyToMessageId !== undefined,
+    isForward: false, isEdited: false, reactions: [],
+  }));
+  const chapters = buildChapters(binaryMessages, semantics);
+  const representativeMessageIds = new Set<number>();
+  for (const chapter of chapters) {
+    if (chapter.kind !== "era" || chapter.quiet) continue;
+    const candidates = embedded.filter((session) => session.startTs <= chapter.endTs && session.endTs >= chapter.startTs);
+    const centroid = weightedMean(candidates);
+    candidates.map((session) => ({ session, distance: cosineDistance(session.embedding, centroid) })).sort((a, b) => a.distance - b.distance).slice(0, 5).forEach(({ session }) => { representativeMessageIds.add(session.firstMessageId); representativeMessageIds.add(session.lastMessageId); });
+  }
+  onProgress(`semantic timeline: ${chapters.filter((chapter) => chapter.kind === "era" && !chapter.quiet).length} group eras from ${semantics.length} active weeks`);
+  return { chapters, representativeMessageIds: [...representativeMessageIds], inputTokens, calls, model: EMBEDDING_MODEL };
 }
 
 function sessionGroups(messages: Message[]): Message[][] {

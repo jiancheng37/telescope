@@ -19,19 +19,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Parsed } from "@/domain/parse";
 import type { Analysis } from "@/domain/types";
+import type { GroupAnalysis, ParsedGroup } from "@/domain/group";
 import type { AiProgressState, LocalExtremeEvidence, LocalStreakMessage } from "@/ui/Report";
+import type { LocalGroupExtremeEvidence, LocalGroupMessage } from "@/ui/GroupReport";
 import type { DeckCard } from "@/ui/cards";
 import { Callout, Kicker, Logo, NightPanel, Panel, Pill, Shield } from "@/ui/primitives";
 import type { WirePayload } from "@/ui/wire";
 import { signOutCurrentUser } from "@/app/actions/auth";
-import type { LocalStickerVisuals } from "@/ui/sticker-assets";
+import type { LocalGroupStickerVisuals, LocalStickerVisuals } from "@/ui/sticker-assets";
 import { invalidateDashboardData } from "@/app/app/dashboard-data";
 import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
-import { requestAnalysis } from "@/lib/analysis-client";
+import { requestAnalysis, requestGroupAnalysis } from "@/lib/analysis-client";
+import type { GroupAiPayload } from "@/llm/group";
 import { applicationUrl, dashboardUrl } from "@/lib/app-url";
 
 const Report = lazy(() => import("@/ui/Report").then((module) => ({ default: module.Report })));
 const ReportActions = lazy(() => import("@/ui/ReportActions").then((module) => ({ default: module.ReportActions })));
+const GroupReport = lazy(() => import("@/ui/GroupReport").then((module) => ({ default: module.GroupReport })));
 
 async function filesFromDrop(dataTransfer: DataTransfer): Promise<File[]> {
   const { filesFromDrop: collectFiles } = await import("@/ui/sticker-assets");
@@ -67,6 +71,16 @@ interface PendingFile {
   raw: string;
   parsed: Parsed;
   files: File[];
+}
+
+interface PreparedGroup {
+  analysis: GroupAnalysis;
+  reportId: string | null;
+  extremeEvidence?: LocalGroupExtremeEvidence;
+  ai?: GroupAiPayload;
+  aiEvidence?: LocalGroupMessage[];
+  doubleTextEvidence?: LocalGroupMessage[];
+  stickerVisuals?: LocalGroupStickerVisuals;
 }
 
 type Phase = { kind: "idle" } | { kind: "working"; note: string } | { kind: "done" } | { kind: "error"; message: string };
@@ -112,6 +126,23 @@ function localExtremeEvidence(parsed: Parsed, analysis: Analysis): LocalExtremeE
   const longestRun = parsed.messages.filter((message) => runSet.has(message.id)).map(toLocal);
   if (!longestMessage && !longestRun.length) return undefined;
   return { longestMessage: longestMessage ? toLocal(longestMessage) : undefined, longestRun: longestRun.length ? longestRun : undefined };
+}
+
+function localGroupExtremeEvidence(parsed: ParsedGroup, analysis: GroupAnalysis): LocalGroupExtremeEvidence | undefined {
+  const longestId = analysis.extremes.longestMessage?.messageId;
+  const runIds = new Set(analysis.extremes.longestRun?.messageIds ?? []);
+  const toLocal = (message: ParsedGroup["messages"][number]) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") });
+  const longestMessage = longestId === undefined ? undefined : parsed.messages.find((message) => message.id === longestId);
+  const longestRun = parsed.messages.filter((message) => runIds.has(message.id)).map(toLocal);
+  if (!longestMessage && !longestRun.length) return undefined;
+  return { longestMessage: longestMessage ? toLocal(longestMessage) : undefined, longestRun: longestRun.length ? longestRun : undefined };
+}
+
+function localGroupDoubleTextEvidence(parsed: ParsedGroup, analysis: GroupAnalysis): LocalGroupMessage[] | undefined {
+  const ids = analysis.doubleTexting?.longest?.messageIds;
+  if (!ids?.length) return undefined;
+  const wanted = new Set(ids);
+  return parsed.messages.filter((message) => wanted.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
 }
 
 /**
@@ -165,7 +196,17 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
   const [prepared, setPrepared] = useState<Loaded | null>(null);
+  const [groupLoaded, setGroupLoaded] = useState<PreparedGroup | null>(null);
+  const [preparedGroup, setPreparedGroup] = useState<PreparedGroup | null>(null);
+  const [pendingGroup, setPendingGroup] = useState<ParsedGroup | null>(null);
+  const [pendingGroupRaw, setPendingGroupRaw] = useState<string | null>(null);
+  const [pendingGroupFiles, setPendingGroupFiles] = useState<File[]>([]);
+  const [telegramSenderId, setTelegramSenderId] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!viewer) return;
+    void fetch("/api/settings/telegram-identity", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((body: { telegramSenderId?: string | null } | null) => setTelegramSenderId(body?.telegramSenderId ?? null));
+  }, [viewer?.name]);
 
   const requestLlm = useCallback(async (target: Loaded, keepCreationLoading = false) => {
     setPhase({ kind: "working", note: "reading the conversation" });
@@ -187,11 +228,14 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
   }, []);
 
   const load = useCallback(async (files: File[]) => {
+    setPreparedGroup(null);
+    setPendingGroup(null);
     setPhase({ kind: "working", note: "reading the file" });
     try {
-      const [{ ParseError, parseExport }, { resultJsonFrom }] = await Promise.all([
+      const [{ ParseError, parseExport }, { resultJsonFrom }, groupModule] = await Promise.all([
         import("@/domain/parse"),
         import("@/ui/sticker-assets"),
+        import("@/domain/group"),
       ]);
       const file = resultJsonFrom(files);
       if (!file) throw new ParseError("No result.json was found.", "Choose the complete Telegram export folder that contains result.json.");
@@ -201,7 +245,22 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       // Yield once so the "working" state actually paints before parse blocks the
       // main thread — a 2.6MB export takes long enough to look like a dead click.
       await new Promise((r) => setTimeout(r, 0));
-      const parsed = parseExport(JSON.parse(raw));
+      const decoded = JSON.parse(raw) as unknown;
+      if (groupModule.isGroupExport(decoded)) {
+        setPendingGroup(groupModule.parseGroupExport(decoded));
+        setPendingGroupRaw(raw);
+        setPendingGroupFiles(files);
+        setPhase({ kind: "idle" });
+        return;
+      }
+      const parsed = parseExport(decoded);
+      if (viewer && parsed.selfSide !== null) {
+        const selfEntry = [...parsed.idToSide].find(([, side]) => side === parsed.selfSide);
+        if (selfEntry && selfEntry[0] !== telegramSenderId) {
+          setTelegramSenderId(selfEntry[0]);
+          void fetch("/api/settings/telegram-identity", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ telegramSenderId: selfEntry[0] }) });
+        }
+      }
       setPendingFile({ raw, parsed, files });
       setPhase({ kind: "idle" });
     } catch (err) {
@@ -215,7 +274,66 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
               : "Couldn't read that file.",
       });
     }
-  }, []);
+  }, [telegramSenderId, viewer]);
+
+  const confirmGroupParticipants = useCallback(async (includedIds: Set<string>, displayNames: Map<string, string>, groupName: string, withAi: boolean, selfSenderId: string | null) => {
+    if (!pendingGroup) return;
+    const raw = pendingGroupRaw;
+    setPendingGroup(null);
+    setPreparedGroup(null);
+    setPhase({ kind: "working", note: "counting the group" });
+    try {
+      if (viewer && selfSenderId && selfSenderId !== telegramSenderId) {
+        setTelegramSenderId(selfSenderId);
+        void fetch("/api/settings/telegram-identity", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ telegramSenderId: selfSenderId }) });
+      }
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+      const [{ analyzeGroup, selectGroupParticipants }, { buildGroupStickerVisuals }] = await Promise.all([import("@/domain/group"), import("@/ui/sticker-assets")]);
+      const selectedGroup = selectGroupParticipants(pendingGroup, includedIds, displayNames);
+      selectedGroup.chat.name = groupName.trim().slice(0, 40);
+      const analysis = analyzeGroup(selectedGroup);
+      const extremeEvidence = localGroupExtremeEvidence(selectedGroup, analysis);
+      const doubleTextEvidence = localGroupDoubleTextEvidence(selectedGroup, analysis);
+      const stickerVisuals = await buildGroupStickerVisuals(selectedGroup, pendingGroupFiles);
+      let reportId: string | null = null;
+      if (viewer) {
+        setPhase({ kind: "working", note: "saving your group report" });
+        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analysis) });
+        if (response.ok) {
+          reportId = ((await response.json()) as { id: string }).id;
+          invalidateDashboardData();
+        } else {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          setSaveWarning(body?.error ?? "The group report is ready, but it could not be saved.");
+        }
+      }
+      if (reportId && extremeEvidence) {
+        try { localStorage.setItem(`telescope:group-extremes:${reportId}`, JSON.stringify(extremeEvidence)); } catch { /* The saved numerical report remains usable without browser-local receipts. */ }
+      }
+      if (reportId && doubleTextEvidence) {
+        try { localStorage.setItem(`telescope:group-double-text:${reportId}`, JSON.stringify(doubleTextEvidence)); } catch { /* Browser-local receipts are optional. */ }
+      }
+      if (reportId && stickerVisuals) {
+        try { localStorage.setItem(`telescope:group-stickers:${reportId}`, JSON.stringify(stickerVisuals)); } catch { /* Sticker artwork remains available for this session. */ }
+      }
+      let ai: GroupAiPayload | undefined;
+      let aiEvidence: LocalGroupMessage[] | undefined;
+      if (withAi && viewer && reportId && raw) {
+        try {
+          setPhase({ kind: "working", note: "reading the group conversation" });
+          ai = await requestGroupAnalysis({ raw, reportId, onProgress: (note) => setPhase({ kind: "working", note }) });
+          const ids = new Set([...(ai.topics ?? ai.themes ?? []), ...ai.roles, ...(ai.eras ?? []), ...(ai.lore ?? [])].flatMap((item) => item.evidenceMessageIds));
+          aiEvidence = selectedGroup.messages.filter((message) => ids.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
+          if (aiEvidence.length) localStorage.setItem(`telescope:group-ai-evidence:${reportId}`, JSON.stringify(aiEvidence));
+        } catch (error) {
+          setSaveWarning(error instanceof Error ? `The group report is ready, but AI insights failed: ${error.message}` : "The group report is ready, but AI insights failed.");
+        }
+      }
+      setPreparedGroup({ analysis, reportId, extremeEvidence, ai, aiEvidence, doubleTextEvidence, stickerVisuals });
+    } catch (err) {
+      setPhase({ kind: "error", message: err instanceof Error ? err.message : "The group report could not be created." });
+    }
+  }, [pendingGroup, pendingGroupFiles, pendingGroupRaw, telegramSenderId, viewer]);
 
   const confirmParticipants = useCallback(async (participants: [string, string], withAi: boolean) => {
     if (!pendingFile) return;
@@ -349,6 +467,10 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
     );
   }
 
+  if (groupLoaded) {
+    return <Suspense fallback={<div className="min-h-dvh bg-night" aria-label="Opening group report" />}><div className="report-reveal"><GroupReport analysis={groupLoaded.analysis} ai={groupLoaded.ai} aiEvidence={groupLoaded.aiEvidence} aiControl={!viewer ? <AccountGate signedIn={false} analysis={groupLoaded.analysis} /> : undefined} endControl={!viewer ? <GuestEndPrompt analysis={groupLoaded.analysis} /> : undefined} guestFinalControl={!viewer ? <GuestFinalPrompt analysis={groupLoaded.analysis} /> : undefined} extremeEvidence={groupLoaded.extremeEvidence} doubleTextEvidence={groupLoaded.doubleTextEvidence} stickerVisuals={groupLoaded.stickerVisuals} localEvidenceKey={groupLoaded.reportId ?? undefined} onBack={() => { setGroupLoaded(null); setPhase({ kind: "idle" }); if (input.current) input.current.value = ""; }} /></div></Suspense>;
+  }
+
   return (
     <>
     {startView === "workspace" ? (
@@ -358,8 +480,19 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
     )}
     <LocalLoadingModal
       phase={phase}
-      reportReady={Boolean(prepared)}
+      reportReady={Boolean(prepared || preparedGroup)}
       onView={() => {
+        if (preparedGroup) {
+          if (preparedGroup.reportId) {
+            window.dispatchEvent(new Event(TELESCOPE_OPEN_REPORT_EVENT));
+            router.push(`/reports/${preparedGroup.reportId}`);
+            return;
+          }
+          setGroupLoaded(preparedGroup);
+          setPreparedGroup(null);
+          setPhase({ kind: "idle" });
+          return;
+        }
         if (!prepared) return;
         if (prepared.reportId) {
           window.dispatchEvent(new Event(TELESCOPE_OPEN_REPORT_EVENT));
@@ -383,8 +516,99 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         window.requestAnimationFrame(() => input.current?.click());
       }}
     />}
+    {pendingGroup && <GroupParticipantModal
+      group={pendingGroup}
+      onConfirm={confirmGroupParticipants}
+      accountName={viewer?.name}
+      canUseAi={Boolean(viewer)}
+      telegramSenderId={telegramSenderId}
+      onBack={() => setPendingGroup(null)}
+      onChooseAnother={() => {
+        setPendingGroup(null);
+        if (input.current) input.current.value = "";
+        window.requestAnimationFrame(() => input.current?.click());
+      }}
+    />}
     </>
   );
+}
+
+function GroupParticipantModal({
+  group,
+  onConfirm,
+  onBack,
+  onChooseAnother,
+  accountName,
+  canUseAi,
+  telegramSenderId,
+}: {
+  group: ParsedGroup;
+  onConfirm: (includedIds: Set<string>, displayNames: Map<string, string>, groupName: string, withAi: boolean, selfSenderId: string | null) => void;
+  onBack: () => void;
+  onChooseAnother: () => void;
+  accountName?: string;
+  canUseAi: boolean;
+  telegramSenderId: string | null;
+}) {
+  const counts = new Map<string, number>();
+  for (const message of group.messages) counts.set(message.participantId, (counts.get(message.participantId) ?? 0) + 1);
+  const people = [...group.participants].sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0) || a.name.localeCompare(b.name));
+  const [selected, setSelected] = useState(() => new Set(people.map((person) => person.id)));
+  const [displayNames, setDisplayNames] = useState(() => new Map(people.map((person) => [person.id, person.name])));
+  const matchingSelf = accountName ? people.filter((person) => person.name.toLocaleLowerCase() === accountName.toLocaleLowerCase()) : [];
+  const [selfId, setSelfId] = useState<string | null>(() => people.some((person) => person.id === telegramSenderId) ? telegramSenderId : matchingSelf.length === 1 ? matchingSelf[0].id : null);
+  const [query, setQuery] = useState("");
+  const [withAi, setWithAi] = useState(false);
+  const [groupName, setGroupName] = useState(group.chat.name.slice(0, 40));
+  const visible = people.filter((person) => (displayNames.get(person.id) ?? person.name).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const selectedMessages = group.messages.reduce((sum, message) => sum + Number(selected.has(message.participantId)), 0);
+  const peak = Math.max(1, ...people.map((person) => counts.get(person.id) ?? 0));
+  const namesValid = [...selected].every((id) => (selfId === id && accountName ? accountName : displayNames.get(id))?.trim());
+  const valid = selected.size >= 3 && namesValid && Boolean(groupName.trim()) && (!accountName || Boolean(selfId));
+  const toggle = (id: string) => setSelected((current) => {
+    if (id === selfId) return current;
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const chooseSelf = (id: string) => {
+    setSelfId(id);
+    setSelected((current) => new Set(current).add(id));
+  };
+  const confirmedNames = () => {
+    const names = new Map(displayNames);
+    if (selfId && accountName) names.set(selfId, accountName);
+    return names;
+  };
+
+  useEffect(() => {
+    if (!telegramSenderId || !people.some((person) => person.id === telegramSenderId)) return;
+    setSelfId(telegramSenderId);
+    setSelected((current) => current.has(telegramSenderId) ? current : new Set(current).add(telegramSenderId));
+  }, [group.participants, telegramSenderId]);
+
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") onBack(); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onBack]);
+
+  return <div onMouseDown={(event) => { if (event.target === event.currentTarget) onBack(); }} className="fixed inset-0 z-50 grid h-dvh place-items-center overflow-hidden bg-night/82 p-4 backdrop-blur-md sm:p-7" role="dialog" aria-modal="true" aria-labelledby="group-participant-title">
+    <form onSubmit={(event) => { event.preventDefault(); if (valid) void onConfirm(new Set(selected), confirmedNames(), groupName.trim(), withAi, selfId); }} className="starfield rise relative flex max-h-[calc(100dvh-2rem)] w-full max-w-[900px] flex-col overflow-hidden rounded-[26px] border border-white/14 bg-night text-white shadow-2xl sm:max-h-[calc(100dvh-3.5rem)]">
+      <header className="relative shrink-0 px-6 pb-5 pt-6 sm:px-9 sm:pt-8">
+        <div className="flex items-start justify-between gap-5"><div><Kicker tone="lit">Group found · {people.length} active senders</Kicker><h2 id="group-participant-title" className="mt-3 font-display text-[clamp(2.5rem,6vw,5rem)] leading-[.9] tracking-[-.025em]">Who belongs in the report?</h2><p className="mt-4 max-w-[68ch] text-sm leading-relaxed text-white/48">Rename anyone as they should appear, and remove people whose messages should not shape the results.{accountName ? ` Choose which participant is you; your name will stay “${accountName}” and can only be changed in Settings.` : ""}</p></div><button type="button" onClick={onBack} aria-label="Close participant review" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/16 text-xl text-white/42 transition hover:border-white/40 hover:text-white">×</button></div>
+        <label className="mt-6 block border-t border-white/12 pt-4"><span className="flex items-center justify-between font-mono text-[8px] uppercase tracking-[.12em] text-white/38"><span>Group report name</span><span>{40 - groupName.length} left</span></span><input value={groupName} maxLength={40} onChange={(event) => setGroupName(event.target.value)} className="mt-2 w-full border-b border-white/16 bg-transparent pb-2 font-display text-2xl text-white outline-none focus:border-accent-lit" /></label>
+        <div className="mt-4 grid gap-3 border-y border-white/12 py-4 sm:grid-cols-[1fr_auto] sm:items-center"><label className="flex items-center gap-3"><span className="text-white/28">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a participant" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/28" /></label><button type="button" onClick={() => setSelected(new Set(people.map((person) => person.id)))} className="font-mono text-[8px] uppercase tracking-[.12em] text-accent-lit transition hover:text-white">Include everyone</button></div>
+      </header>
+      <ol className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 sm:px-9">{visible.map((person, index) => {
+        const count = counts.get(person.id) ?? 0;
+        const included = selected.has(person.id);
+        const isSelf = selfId === person.id && Boolean(accountName);
+        return <li key={person.id} className={`grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b py-3 transition sm:grid-cols-[36px_minmax(140px,230px)_minmax(70px,1fr)_auto] sm:gap-5 ${included ? "border-white/12 text-white" : "border-white/[.07] text-white/28"}`}><button type="button" aria-pressed={included} disabled={isSelf} onClick={() => toggle(person.id)} aria-label={`${included ? "Exclude" : "Include"} ${displayNames.get(person.id) ?? person.name}`} className={`grid h-7 w-7 place-items-center rounded-full border font-mono text-[9px] transition ${included ? "border-accent-lit bg-accent-lit text-night" : "border-white/16"} disabled:cursor-default`}>{included ? "✓" : String(index + 1).padStart(2, "0")}</button><div className="min-w-0">{isSelf ? <div className="border-b border-white/10 py-1 font-display text-xl text-white/52 sm:text-2xl">{accountName}</div> : <input value={displayNames.get(person.id) ?? person.name} maxLength={20} disabled={!included} aria-label={`Report name for ${person.name}`} onChange={(event) => setDisplayNames((current) => new Map(current).set(person.id, event.target.value))} className="w-full border-b border-white/18 bg-transparent py-1 font-display text-xl text-inherit outline-none transition focus:border-accent-lit disabled:opacity-45 sm:text-2xl" />}<span className="mt-1 flex gap-3 font-mono text-[7px] uppercase tracking-[.1em]">{isSelf ? <span className="text-accent-lit">You · name from Settings</span> : accountName ? <button type="button" onClick={() => chooseSelf(person.id)} className="text-white/30 transition hover:text-accent-lit">This is me</button> : null}</span></div><span className="col-start-2 row-start-2 h-1.5 overflow-hidden rounded-full bg-white/8 sm:col-start-auto sm:row-start-auto"><span className={`block h-full rounded-full transition ${included ? "bg-accent-lit" : "bg-white/14"}`} style={{ width: `${Math.max(1, count / peak * 100)}%` }} /></span><span className="row-span-2 text-right font-mono text-[8px] uppercase tracking-[.1em] sm:row-span-1">{count.toLocaleString()} <span className="hidden sm:inline">messages</span></span></li>;
+      })}</ol>
+      <footer className="relative shrink-0 border-t border-white/12 bg-night/84 px-6 py-4 sm:px-9"><label className={`flex items-start gap-3 border-b border-white/10 pb-4 ${canUseAi ? "cursor-pointer" : "opacity-42"}`}><input type="checkbox" checked={withAi} disabled={!canUseAi} onChange={(event) => setWithAi(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--color-accent-lit)]" /><span><span className="block text-sm font-semibold">Generate group AI insights now</span><span className="mt-1 block text-xs leading-relaxed text-white/42">Recurring themes, conversational roles and group dynamics.{!canUseAi ? " Sign in to enable this." : " Your report opens after the reading is ready."}</span></span></label><div className="mt-4 flex flex-wrap items-center justify-between gap-4"><div><p className={`font-mono text-[9px] uppercase tracking-[.14em] ${valid ? "text-accent-lit" : "text-warn"}`}>{selected.size} people · {selectedMessages.toLocaleString()} messages included</p><div className="mt-2 flex gap-4"><button type="button" onClick={onBack} className="text-xs text-white/38 transition hover:text-white">← Back</button><button type="button" onClick={onChooseAnother} className="text-xs text-white/38 transition hover:text-white">Choose another file</button></div></div><button type="submit" disabled={!valid} className="rounded-full bg-accent-lit px-6 py-3 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-30">Build group report →</button>{!valid && <p className="basis-full text-right text-xs text-warn">{selected.size < 3 ? "Keep at least three people." : !namesValid ? "Every included person needs a name." : "Choose which participant is you."}</p>}</div></footer>
+    </form>
+  </div>;
 }
 
 function ParticipantModal({
@@ -472,7 +696,7 @@ function WorkspaceUpload({
         <header className="border-b border-ink/14 pb-8">
           <p className="font-mono text-[10px] uppercase tracking-[0.17em] text-accent">New analysis</p>
           <h1 className="mt-3 font-display text-[46px] leading-none sm:text-[64px]">Choose a conversation.</h1>
-          <p className="mt-4 max-w-[54ch] text-sm leading-relaxed text-ink/52">Choose the complete folder Telegram created for one chat. Telescope reads the conversation and automatically includes sticker artwork when it is present.</p>
+          <p className="mt-4 max-w-[54ch] text-sm leading-relaxed text-ink/52">Choose the complete folder Telegram created for a direct or group chat. Telescope detects the report type and includes sticker artwork when it is present.</p>
         </header>
 
         <div className="my-auto py-8">
@@ -489,7 +713,7 @@ function WorkspaceUpload({
             </div>
             <div>
               <p className="max-w-[13ch] font-display text-[42px] leading-[0.92] sm:text-[62px]">{phase.kind === "working" ? `${phase.note}…` : <>Choose the export <span className="italic text-accent-lit">folder</span></>}</p>
-              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/14 pt-5 text-xs text-white/45"><span>One 1:1 chat · any length</span><span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.14em] text-safe-lit"><Shield /> raw chat stays local</span><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setGuideOpen(true); }} className="text-accent-lit underline decoration-accent-lit/35 underline-offset-4">How to export it</button></div>
+              <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/14 pt-5 text-xs text-white/45"><span>Direct or group chat · any length</span><span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.14em] text-safe-lit"><Shield /> raw chat stays local</span><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setGuideOpen(true); }} className="text-accent-lit underline decoration-accent-lit/35 underline-offset-4">How to export it</button></div>
             </div>
           </label>
           {phase.kind === "error" && <p className="mt-4 text-sm text-side-a">{phase.message}</p>}
@@ -599,7 +823,7 @@ function LocalLoadingModal({ phase, reportReady, onView }: { phase: Phase; repor
   );
 }
 
-function rememberForSignup(analysis: Analysis) {
+function rememberForSignup(analysis: Analysis | GroupAnalysis) {
   try {
     sessionStorage.setItem("telescope:pending-analysis", JSON.stringify(analysis));
   } catch {
@@ -608,7 +832,7 @@ function rememberForSignup(analysis: Analysis) {
   }
 }
 
-function GuestEndPrompt({ analysis }: { analysis: Analysis }) {
+function GuestEndPrompt({ analysis }: { analysis: Analysis | GroupAnalysis }) {
   return (
     <div className="max-w-[980px]">
       <p className="font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit">Keep the report</p>
@@ -619,21 +843,23 @@ function GuestEndPrompt({ analysis }: { analysis: Analysis }) {
   );
 }
 
-function GuestFinalPrompt({ analysis }: { analysis: Analysis }) {
-  return <div className="mt-8"><p className="mx-auto max-w-[720px] text-[clamp(1.1rem,2vw,1.5rem)] font-semibold leading-snug text-white/76">Log in or sign up to share this with the co-star of this chaos.</p><Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white">Log in or sign up <span aria-hidden="true">→</span></Link></div>;
+function GuestFinalPrompt({ analysis }: { analysis: Analysis | GroupAnalysis }) {
+  const group = "kind" in analysis && analysis.kind === "group";
+  return <div className="mt-8"><p className="mx-auto max-w-[720px] text-[clamp(1.1rem,2vw,1.5rem)] font-semibold leading-snug text-white/76">{group ? "Log in or sign up to share this with the rest of the room." : "Log in or sign up to share this with the co-star of this chaos."}</p><Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-6 inline-flex items-center gap-3 rounded-full bg-accent-lit px-7 py-3.5 text-sm font-semibold text-night transition hover:-translate-y-0.5 hover:bg-white">Log in or sign up <span aria-hidden="true">→</span></Link></div>;
 }
 
-function AccountGate({ signedIn, analysis }: { signedIn: boolean; analysis: Analysis }) {
+function AccountGate({ signedIn, analysis }: { signedIn: boolean; analysis: Analysis | GroupAnalysis }) {
+  const group = "kind" in analysis && analysis.kind === "group";
   return (
     <NightPanel className="ai-insights-panel border border-accent-lit/45 shadow-[inset_0_0_0_1px_rgba(42,171,238,.06)]">
       <Kicker tone="lit" className="mb-3.5">Powered by AI</Kicker>
       <p className="font-display text-[23px] leading-snug text-white">
-        {signedIn ? "Unlock what the numbers cannot name." : "Unlock new insights hidden in the conversation."}
+        {signedIn ? "Unlock what the numbers cannot name." : group ? "Unlock what shaped the room." : "Unlock new insights hidden in the conversation."}
       </p>
       <p className="mt-3.5 text-sm leading-relaxed text-white/60">
         {signedIn
           ? "Let AI name eras, surface recurring lore and identify the roles you each grew into."
-          : "Sign up to reveal named eras, recurring lore, topic patterns and the roles you each grew into—with evidence from the chat."}
+          : group ? "Sign up to reveal recurring topics, group roles, shared lore and named eras—with evidence from the chat." : "Sign up to reveal named eras, recurring lore, topic patterns and the roles you each grew into—with evidence from the chat."}
       </p>
       {!signedIn && (
         <Link href="/sign-in" onClick={() => rememberForSignup(analysis)} className="mt-5 block w-full rounded-full bg-accent-lit px-5 py-3 text-center text-sm font-semibold text-night transition hover:brightness-110">
@@ -958,7 +1184,7 @@ function SampleReportGraphic({ kind }: { kind: SampleReportKind }) {
   }
 
   if (kind === "language") {
-    return <div className="grid gap-6 sm:grid-cols-2"><div className="border-t border-side-a pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-a">Alice</p><p className="mt-3 font-display text-[clamp(1.7rem,3vw,3rem)] leading-tight text-white">“be serious”<br /><span className="text-white/60">“wait wait”</span></p></div><div className="border-t border-side-b pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-b">Bob</p><p className="mt-3 font-display text-[clamp(1.7rem,3vw,3rem)] leading-tight text-white">“objectively”<br /><span className="text-white/60">“hear me out”</span></p></div><div className="sm:col-span-2 flex items-baseline gap-4 border-t border-white/12 pt-4"><span className="font-mono text-[8px] uppercase tracking-[.14em] text-white/28">What became theirs</span><span className="font-display text-2xl italic text-accent-lit">“tiny emergency”</span></div></div>;
+    return <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-x-6"><div className="min-w-0 border-t border-side-a pt-3 sm:pt-4"><p className="font-mono text-[7px] uppercase tracking-[.15em] text-side-a sm:text-[8px]">Alice</p><p className="mt-2 font-display text-[clamp(1.25rem,5vw,3rem)] leading-[1.05] text-white sm:mt-3">“be serious”<br /><span className="text-white/60">“wait wait”</span></p></div><div className="min-w-0 border-t border-side-b pt-3 sm:pt-4"><p className="font-mono text-[7px] uppercase tracking-[.15em] text-side-b sm:text-[8px]">Bob</p><p className="mt-2 font-display text-[clamp(1.25rem,5vw,3rem)] leading-[1.05] text-white sm:mt-3">“objectively”<br /><span className="text-white/60">“hear me out”</span></p></div><div className="col-span-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-white/12 pt-3 sm:pt-4"><span className="font-mono text-[7px] uppercase tracking-[.14em] text-white/28 sm:text-[8px]">What became theirs</span><span className="font-display text-xl italic text-accent-lit sm:text-2xl">“tiny emergency”</span></div></div>;
   }
 
   return <div className="grid gap-5 sm:grid-cols-2"><article className="border-t border-side-a pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-a">Alice · Role 01</p><h4 className="mt-2 font-display text-3xl text-white">The Archivist</h4><p className="mt-2 text-xs leading-relaxed text-white/45">Keeps the shared past retrievable, resurfacing old details exactly when they matter.</p><p className="mt-3 border-l border-white/14 pl-3 text-xs italic text-white/32">“I found the screenshot from that night.”</p></article><article className="border-t border-side-b pt-4"><p className="font-mono text-[8px] uppercase tracking-[.15em] text-side-b">Bob · Role 01</p><h4 className="mt-2 font-display text-3xl text-white">The Instigator</h4><p className="mt-2 text-xs leading-relaxed text-white/45">Turns an ordinary check-in into the beginning of another elaborate side quest.</p><p className="mt-3 border-l border-white/14 pl-3 text-xs italic text-white/32">“Okay, but what if we actually went?”</p></article></div>;
@@ -972,6 +1198,10 @@ function ReportShowcase() {
   const pageCount = SAMPLE_REPORT_PAGES.length + 1;
   const moment = active === 0 ? null : SAMPLE_REPORT_PAGES[active - 1];
   const goTo = (page: number) => setActive(Math.min(pageCount - 1, Math.max(0, page)));
+  const clickAdvance = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (samplePhase !== "ready" || (event.target as HTMLElement).closest("a,button,input,textarea,select,[role='button'],[role='dialog']")) return;
+    goTo(active + 1);
+  };
 
   useEffect(() => {
     const frame = sampleFrameRef.current;
@@ -1008,7 +1238,7 @@ function ReportShowcase() {
           <h2 className="max-w-[620px] font-display text-[clamp(2.5rem,4.5vw,4.8rem)] leading-[.92] tracking-[-.025em]">The conversation looks <span className="italic text-accent-lit">different from here.</span></h2>
           <p className="mt-7 max-w-[38ch] text-base leading-relaxed text-white/54">Seven pages from one fictional history—measured and interpreted the same way as your own report.</p>
         </header>
-        <div ref={sampleFrameRef} onMouseEnter={() => setSamplePaused(true)} onMouseLeave={() => setSamplePaused(false)} onFocusCapture={() => setSamplePaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSamplePaused(false); }} className="flex h-[760px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] sm:h-[780px] lg:h-[720px]">
+        <div ref={sampleFrameRef} onClick={clickAdvance} onMouseEnter={() => setSamplePaused(true)} onMouseLeave={() => setSamplePaused(false)} onFocusCapture={() => setSamplePaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setSamplePaused(false); }} className={`flex h-[760px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-white/14 bg-white/[.035] sm:h-[780px] lg:h-[720px] ${samplePhase === "ready" && active < pageCount - 1 ? "cursor-pointer" : ""}`}>
           {samplePhase !== "ready" ? (
             <div className="grid min-h-0 flex-1 place-items-center bg-night text-white" role="status" aria-live="polite">
               <div className="flex flex-col items-center text-center">
@@ -1026,8 +1256,8 @@ function ReportShowcase() {
             {moment ? (
               <div key={moment.kind} className="result-stat-enter flex h-full min-h-0 flex-col">
                 <div className="flex items-center justify-between gap-4 font-mono text-[9px] uppercase tracking-[.17em] text-white/30"><span>{moment.kicker}</span><span>{String(active + 1).padStart(2, "0")} / {String(pageCount).padStart(2, "0")}</span></div>
-                <div className="my-auto py-9"><h3 className="max-w-[18ch] font-display text-[clamp(2.2rem,4vw,4.25rem)] leading-[.92] tracking-[-.025em] text-white">{moment.title}</h3><p className="mt-6 max-w-[54ch] text-sm leading-relaxed text-white/48 sm:text-base">{moment.detail}</p></div>
-                <div className="border-t border-white/12 pt-6"><SampleReportGraphic kind={moment.kind} /></div>
+                <div className={`my-auto ${moment.kind === "language" ? "py-4 sm:py-6" : "py-9"}`}><h3 className={`max-w-[18ch] font-display leading-[.92] tracking-[-.025em] text-white ${moment.kind === "language" ? "text-[clamp(1.8rem,3.5vw,3.5rem)]" : "text-[clamp(2.2rem,4vw,4.25rem)]"}`}>{moment.title}</h3><p className={`max-w-[54ch] text-sm leading-relaxed text-white/48 sm:text-base ${moment.kind === "language" ? "mt-3 sm:mt-4" : "mt-6"}`}>{moment.detail}</p></div>
+                <div className={`border-t border-white/12 ${moment.kind === "language" ? "pt-4" : "pt-6"}`}><SampleReportGraphic kind={moment.kind} /></div>
               </div>
             ) : (
               <div key="cover" className="result-stat-enter flex h-full min-h-0 flex-col">
@@ -1071,6 +1301,20 @@ const EXPORT_SCENES = [
 function ExportWalkthrough() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const walkthroughRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const walkthrough = walkthroughRef.current;
+    if (!walkthrough || visible) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setVisible(true);
+      observer.disconnect();
+    }, { threshold: 0.18 });
+    observer.observe(walkthrough);
+    return () => observer.disconnect();
+  }, [visible]);
 
   useEffect(() => {
     if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -1079,7 +1323,7 @@ function ExportWalkthrough() {
   }, [paused]);
 
   return (
-    <section onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }} className="overflow-hidden rounded-[24px] border border-ink/12 bg-surface shadow-[0_18px_60px_rgba(14,22,33,.08)]" aria-label="Illustrated Telegram export walkthrough">
+    <section ref={walkthroughRef} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }} className={`${visible ? "export-walkthrough-enter" : "opacity-0"} overflow-hidden rounded-[24px] border border-ink/12 bg-surface shadow-[0_18px_60px_rgba(14,22,33,.08)]`} aria-label="Illustrated Telegram export walkthrough">
       <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4 sm:px-6"><span className="font-mono text-[9px] uppercase tracking-[.16em] text-accent-deep">Telegram Desktop → Telescope</span><span className="font-mono text-[8px] uppercase tracking-[.14em] text-ink/35">{String(active + 1).padStart(2, "0")} / 03</span></div>
       <div className="relative flex h-[430px] overflow-hidden bg-night p-5 text-white sm:h-[360px] sm:p-7 lg:h-auto lg:aspect-[16/7]">
         <div key={active} className="result-stat-enter grid min-h-0 w-full flex-1 place-items-center">
@@ -1191,7 +1435,7 @@ function Landing({
               <span className="hidden lg:block">See the conversation<ShufflingHeroEnding /></span>
             </h1>
             <p className="rise mt-6 max-w-[560px] text-[16px] leading-relaxed text-white/62 sm:text-[18px]" style={{ animationDelay: "300ms" }}>
-              Drop one Telegram chat. Get its rhythms, silences, private language, and the parts that only appear when years are seen at once.
+              Drop a Telegram 1-to-1 or group chat. Get its rhythms, silences, private language, and the patterns that only appear when years are seen at once.
             </p>
             <div className="rise mt-8 hidden lg:block" style={{ animationDelay: "380ms" }}>
               <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
@@ -1249,7 +1493,7 @@ function Landing({
             )}
             </div>
             <div className="relative z-10 flex flex-wrap items-center gap-x-5 gap-y-2 sm:col-start-2">
-              <span className="text-xs text-white/45">One 1:1 chat · any length</span>
+              <span className="text-xs text-white/45">Direct or group chat · any length</span>
               <span className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.14em] text-safe-lit"><Shield /> never uploaded</span>
               <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); scrollToSection("export"); }} className="text-xs text-accent-lit underline decoration-accent-lit/35 underline-offset-4 transition hover:text-white">How do I export the folder?</button>
             </div>

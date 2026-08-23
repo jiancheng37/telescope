@@ -5,9 +5,11 @@ import {
 } from "@aws-sdk/client-sqs";
 import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { analyze } from "../src/domain/index";
+import { analyzeGroup, parseGroupExport, selectGroupParticipants, type GroupAnalysis } from "../src/domain/group";
 import { runWrapped } from "../src/llm/run";
+import { runGroupReading } from "../src/llm/group";
 import { toWire } from "../src/ui/wire";
-import { completeReport } from "../src/lib/reports";
+import { completeGroupReport, completeReport } from "../src/lib/reports";
 import { prisma } from "../src/lib/prisma";
 import { analysisInfrastructure, maximumExportBytes } from "../src/lib/analysis-infrastructure";
 import { closeStaleAnalysisJobs } from "../src/lib/analysis-job-maintenance";
@@ -58,6 +60,7 @@ async function processJob(jobId: string) {
       participantA: true,
       participantB: true,
       attempts: true,
+      report: { select: { kind: true, analysis: true } },
     },
   });
   if (!job) {
@@ -73,25 +76,30 @@ async function processJob(jobId: string) {
     if (!object.Body) throw new Error("The private export was missing.");
     const raw = await object.Body.transformToString("utf-8");
     const decoded = JSON.parse(raw) as unknown;
-    const { parsed, analysis } = analyze(decoded);
-    console.log(
-      `[analysis-worker] job ${job.id} parsed ${analysis.volume.total.toLocaleString()} messages`,
-    );
-    parsed.chat.participants = [job.participantA, job.participantB];
-    analysis.chat.participants = [job.participantA, job.participantB];
-
-    const result = await runWrapped(parsed, analysis, {
-      onProgress(note) {
-        if (finished) return;
-        console.log(`[analysis-worker] job ${job.id} ${note}`);
-        void prisma.analysisJob.updateMany({
-          where: { id: job.id, status: "PROCESSING" },
-          data: { stage: note.slice(0, 500) },
-        }).catch((error) => console.error("[analysis-worker] couldn't persist progress", error));
-      },
-    });
-    const payload = toWire(result);
-    await completeReport(job.reportId, job.userId, analysis, payload);
+    const progress = (note: string) => {
+      if (finished) return;
+      console.log(`[analysis-worker] job ${job.id} ${note}`);
+      void prisma.analysisJob.updateMany({
+        where: { id: job.id, status: "PROCESSING" },
+        data: { stage: note.slice(0, 500) },
+      }).catch((error) => console.error("[analysis-worker] couldn't persist progress", error));
+    };
+    if (job.report.kind === "GROUP") {
+      const saved = job.report.analysis as unknown as GroupAnalysis;
+      const displayNames = new Map(saved.participants.map((person) => [person.id, person.name]));
+      const selected = selectGroupParticipants(parseGroupExport(decoded), new Set(displayNames.keys()), displayNames);
+      const analysis = analyzeGroup(selected);
+      console.log(`[analysis-worker] job ${job.id} parsed ${analysis.totalMessages.toLocaleString()} group messages`);
+      const payload = await runGroupReading(selected, analysis, { onProgress: progress });
+      await completeGroupReport(job.reportId, job.userId, analysis, payload);
+    } else {
+      const { parsed, analysis } = analyze(decoded);
+      console.log(`[analysis-worker] job ${job.id} parsed ${analysis.volume.total.toLocaleString()} messages`);
+      parsed.chat.participants = [job.participantA, job.participantB];
+      analysis.chat.participants = [job.participantA, job.participantB];
+      const result = await runWrapped(parsed, analysis, { onProgress: progress });
+      await completeReport(job.reportId, job.userId, analysis, toWire(result));
+    }
     finished = true;
     await prisma.analysisJob.update({
       where: { id: job.id },

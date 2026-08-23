@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { Analysis } from "@/domain/types";
+import type { GroupAnalysis } from "@/domain/group";
 import type { WirePayload } from "@/ui/wire";
 import { buildDeck } from "@/ui/cards";
 import { Report } from "@/ui/Report";
@@ -9,6 +10,9 @@ import { ReportActions } from "@/ui/ReportActions";
 import { SavedReportReadingControl } from "@/ui/SavedReportReadingControl";
 import { Prisma } from "@/generated/prisma/client";
 import { dashboardUrl } from "@/lib/app-url";
+import { GroupReport } from "@/ui/GroupReport";
+import { SavedGroupReadingControl } from "@/ui/SavedGroupReadingControl";
+import type { GroupAiPayload } from "@/llm/group";
 
 export default async function SavedReportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ insights?: string | string[] }> }) {
   const session = await auth();
@@ -17,9 +21,14 @@ export default async function SavedReportPage({ params, searchParams }: { params
   const query = await searchParams;
   const [saved, profile] = await Promise.all([prisma.report.findFirst({
     where: { id, userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } },
-    select: { analysis: true, llm: true, participantA: true, participantB: true, status: true, sharedMessagesVisible: true },
+    select: { analysis: true, llm: true, participantA: true, participantB: true, status: true, sharedMessagesVisible: true, kind: true },
   }), prisma.user.findUnique({ where: { id: session.user.id }, select: { reportName: true } })]);
   if (!saved?.analysis) notFound();
+
+  if (saved.kind === "GROUP") {
+    const ai = saved.llm ? saved.llm as unknown as GroupAiPayload : null;
+    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={ai} aiControl={!ai ? <SavedGroupReadingControl reportId={id} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} backHref={dashboardUrl()} saved localEvidenceKey={id} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(ai)} initialIncludeMessages={saved.sharedMessagesVisible} evidenceKind="group" />} />;
+  }
 
   const analysis = saved.analysis as unknown as Analysis;
   const accountName = profile?.reportName?.trim() || session.user.name?.trim();

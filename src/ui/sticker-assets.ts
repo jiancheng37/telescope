@@ -1,4 +1,5 @@
 import type { Parsed } from "@/domain/parse";
+import type { ParsedGroup } from "@/domain/group";
 
 export interface LocalStickerVisual {
   path: string;
@@ -12,6 +13,8 @@ export interface LocalStickerVisuals {
   a: LocalStickerVisual[];
   b: LocalStickerVisual[];
 }
+
+export type LocalGroupStickerVisuals = Record<string, LocalStickerVisual[]>;
 
 export const TELESCOPE_STICKER_VISUALS_EVENT = "telescope:sticker-visuals";
 
@@ -136,4 +139,40 @@ export async function buildStickerVisuals(parsed: Parsed, files: File[]): Promis
   const a = await side(0);
   const b = await side(1);
   return a.length || b.length ? { a, b } : undefined;
+}
+
+/** Resolve the five most-sent exact sticker assets for each group participant. */
+export async function buildGroupStickerVisuals(parsed: ParsedGroup, files: File[]): Promise<LocalGroupStickerVisuals | undefined> {
+  const assets = filesByExportPath(files);
+  const assetFor = (path: string) => assets.get(path) ?? assets.get(basename(path));
+  const counts = new Map(parsed.participants.map((person) => [person.id, new Map<string, { count: number; emoji: string }>()]));
+  for (const message of parsed.messages) {
+    if (message.mediaType !== "sticker" || !message.assetPath || !assetFor(message.assetPath)) continue;
+    const personal = counts.get(message.participantId);
+    if (!personal) continue;
+    const current = personal.get(message.assetPath) ?? { count: 0, emoji: message.stickerEmoji ?? "" };
+    current.count++;
+    personal.set(message.assetPath, current);
+  }
+  const encoded = new Map<string, string>();
+  let storedBytes = 0;
+  const out: LocalGroupStickerVisuals = {};
+  for (const participant of parsed.participants) {
+    const winners = [...(counts.get(participant.id)?.entries() ?? [])].sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+    const visuals: LocalStickerVisual[] = [];
+    for (const [path, info] of winners) {
+      const file = assetFor(path)!;
+      if (file.size > 1_500_000) continue;
+      let src = encoded.get(path);
+      if (!src) {
+        if (storedBytes + file.size > 2_500_000) continue;
+        src = await dataUrl(file);
+        encoded.set(path, src);
+        storedBytes += file.size;
+      }
+      visuals.push({ path, src, emoji: info.emoji, count: info.count, video: /\.webm$/i.test(path) || file.type.startsWith("video/") });
+    }
+    if (visuals.length) out[participant.id] = visuals;
+  }
+  return Object.keys(out).length ? out : undefined;
 }

@@ -304,6 +304,8 @@ export interface Rhythm {
   monologues: Pair<MonologueStats>;
   /** messages by hour of local day, 24 buckets */
   hourHistogram: Pair<number[]>;
+  /** Messages by local weekday, Sunday through Saturday. Optional for older saved reports. */
+  weekdayHistogram?: Pair<number[]>;
   lateNightShare: Pair<number>;
   longestSilences: Silence[];
   revival: RevivalStats[];

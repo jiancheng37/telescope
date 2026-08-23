@@ -44,6 +44,7 @@ import {
 import { Callout, Kicker, Logo, Panel, Shield, Stat, StatStrip } from "./primitives";
 import type { Cited, WireChapterNote, WireDynamic, WireFinding, WireLanguageInsight, WireMotif, WirePayload, WireRole, WireTopic, WireWildSentence } from "./wire";
 import { TELESCOPE_STICKER_VISUALS_EVENT, type LocalStickerVisual, type LocalStickerVisuals } from "./sticker-assets";
+import { FittedQuote } from "./FittedQuote";
 import { dashboardUrl } from "@/lib/app-url";
 
 const defaultDashboardHref = dashboardUrl();
@@ -613,6 +614,35 @@ function HoursChart({ analysis, names }: { analysis: Analysis; names: [string, s
       </div>
     </>
   );
+}
+
+function WeekdayChart({ analysis, names }: { analysis: Analysis; names: [string, string] }) {
+  const h = analysis.rhythm.weekdayHistogram!;
+  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const totals = h.a.map((count, day) => count + (h.b[day] ?? 0));
+  const peak = Math.max(1, ...totals);
+  const winner = totals.indexOf(Math.max(...totals));
+
+  return <>
+    <SlideHead
+      kicker="The weekly rhythm"
+      title={`${labels[winner]} carries the conversation.`}
+      tone="ink"
+      lede="Every message placed on the weekday it was sent."
+      aside={<Legend names={names} tone="ink" />}
+    />
+    <div className="flex h-[clamp(180px,36vh,350px)] items-end gap-3 sm:gap-6">
+      {totals.map((total, day) => <div key={labels[day]} className="group flex h-full min-w-0 flex-1 cursor-default flex-col justify-end outline-none focus-visible:z-20 focus-visible:ring-1 focus-visible:ring-accent" tabIndex={0} aria-label={`${labels[day]}: ${names[0]} ${num(h.a[day] ?? 0)} messages, ${names[1]} ${num(h.b[day] ?? 0)} messages, ${num(total)} total`}>
+        <span className="mb-2 text-center font-mono text-[8px] text-ink/40">{num(total)}</span>
+        <span className="relative flex min-h-0 flex-1 flex-col justify-end">
+          <StackedBarTooltip label={labels[day]} names={names} counts={{ a: h.a[day] ?? 0, b: h.b[day] ?? 0 }} align={day < 2 ? "left" : day > 4 ? "right" : "center"} tone="light" />
+          <span className="block rounded-t-sm transition-[filter] duration-150 group-hover:brightness-110 group-focus-visible:brightness-110" style={{ height: `${((h.b[day] ?? 0) / peak) * 100}%`, background: sideVar(1) }} />
+          <span className="block transition-[filter] duration-150 group-hover:brightness-110 group-focus-visible:brightness-110" style={{ height: `${((h.a[day] ?? 0) / peak) * 100}%`, background: sideVar(0) }} />
+        </span>
+        <span className="border-t border-ink/14 pt-3 text-center font-mono text-[9px] uppercase tracking-[.1em] text-ink/48">{labels[day]}</span>
+      </div>)}
+    </div>
+  </>;
 }
 
 /**
@@ -1732,7 +1762,7 @@ function EraWrappedSlide({ card, notes, modelAssisted, names }: { card: DeckCard
   return (
     <div>
       <WrappedHead night={false} eyebrow="Your eras" copy={modelAssisted ? `${eras.length} significant chapters survived the cut. Scroll through them, then open one for the full story.` : "Weekly changes in volume, replies, media, timing and language located these stretches. AI insights can add meaning and names."}>This conversation had chapters.</WrappedHead>
-      <div className="era-scroll mt-7" onClick={(event) => event.stopPropagation()}>
+      <div className="era-scroll mt-7" data-report-navigation-lock onClick={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} onTouchEnd={(event) => event.stopPropagation()}>
       <ol className="era-timeline" style={{ "--era-count": Math.max(1, eras.length) } as CSSProperties}>
         {eras.map(({ chapter, index }, position) => {
         const note = byIndex.get(index);
@@ -1869,8 +1899,8 @@ function WildSentenceSlide({ item, names, position, total }: { item: WireWildSen
   const side = item.sentence.who;
   return <div>
     <p className="flex items-baseline gap-2 font-mono text-[clamp(.95rem,1.5vw,1.3rem)] font-semibold uppercase tracking-[.16em] text-accent-lit max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-1"><span>Things you actually said</span><span className="text-accent-lit/58"><span className="max-[640px]:hidden">· </span>{String(position).padStart(2, "0")} / {String(total).padStart(2, "0")}</span></p>
-    <button type="button" onClick={() => setOpen(true)} className="group mt-7 block max-w-[1050px] text-left">
-      <h2 className="font-display text-[clamp(2.5rem,7vw,7.6rem)] leading-[.88] tracking-[-.035em] text-white transition group-hover:text-accent-lit">“{item.sentence.body}”</h2>
+    <button type="button" onClick={() => setOpen(true)} className="group mt-7 block w-full max-w-[1050px] text-left">
+      <FittedQuote text={item.sentence.body} maxSize={122} className="text-white transition-colors group-hover:text-accent-lit" />
       <span className="mt-6 inline-flex items-center gap-3 font-mono text-[9px] uppercase tracking-[.16em]" style={{ color: sideVar(side) }}>{names[side]} · {item.category.replaceAll("-", " ")} <span className="text-white/28">context ↗</span></span>
     </button>
     <p className="mt-5 max-w-[64ch] text-sm leading-relaxed text-white/48">{item.explanation}</p>
@@ -1956,7 +1986,7 @@ function WrappedScreen({ slide, active, index, total, direction }: { slide: Wrap
   );
 }
 
-function AiProgressSignal({ state }: { state: AiProgressState }) {
+export function AiProgressSignal({ state }: { state: AiProgressState }) {
   const working = state.kind === "working";
   const width = working ? Math.max(8, Math.min(100, (state.stage / state.total) * 100)) : 100;
   return (
@@ -2135,9 +2165,10 @@ export function Report({
       { id: "yapper", label: "the yapper split", tone: "light", content: <YapperSlide analysis={analysis} names={names} /> },
       { id: "who-starts", label: "who starts it", tone: "light", content: <WhoStartsSlide analysis={analysis} names={names} /> },
       ...(analysis.rhythm.doubleTexting ? [{ id: "double-texting", label: "double texter award", tone: "night" as const, content: <DoubleTexterSlide analysis={analysis} names={names} messages={visibleDoubleTextMessages} /> }] : []),
-      { id: "months", label: "your year in messages", tone: "night", content: <MonthlyChart analysis={analysis} names={names} /> },
+      { id: "months", label: "messages per month", tone: "night", content: <MonthlyChart analysis={analysis} names={names} /> },
       { id: "concentration", label: "where it happened", tone: "night", content: <ConcentrationSlide analysis={analysis} /> },
       { id: "hours", label: "when you talk", tone: "night", content: <HoursChart analysis={analysis} names={names} /> },
+      ...(analysis.rhythm.weekdayHistogram ? [{ id: "weekdays", label: "the weekly rhythm", tone: "light" as const, content: <WeekdayChart analysis={analysis} names={names} /> }] : []),
     ];
     if (timeline && llm) out.push({ id: "eras", label: "your eras", tone: "light", content: <EraWrappedSlide card={timeline} notes={llm.chapterNotes} modelAssisted names={names} /> });
     out.push({ id: "dialects", label: "how you speak", tone: "night", content: <CommunicationSlide analysis={analysis} names={names} stickerVisuals={visibleStickerVisuals} /> });
@@ -2189,12 +2220,12 @@ export function Report({
   }, [advance, go, retreat, slides.length]);
 
   const clickAdvance = (event: React.MouseEvent<HTMLElement>) => {
-    if ((event.target as HTMLElement).closest("a,button,input,textarea,select,[role='button'],[role='dialog']")) return;
+    if ((event.target as HTMLElement).closest("a,button,input,textarea,select,[role='button'],[role='dialog'],[data-report-navigation-lock]")) return;
     advance();
   };
 
   return (
-    <main aria-label="Your conversation report" className="relative h-dvh overflow-hidden bg-night" onClick={clickAdvance} onTouchStart={(e) => { touchStart.current = e.touches[0]?.clientX ?? null; }} onTouchEnd={(e) => { if (touchStart.current === null) return; const delta = (e.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current; if (Math.abs(delta) > 45) delta < 0 ? advance() : retreat(); touchStart.current = null; }}>
+    <main aria-label="Your conversation report" className="relative h-dvh overflow-hidden bg-night" onClick={clickAdvance} onTouchStart={(e) => { if ((e.target as HTMLElement).closest("[data-report-navigation-lock]")) { touchStart.current = null; return; } touchStart.current = e.touches[0]?.clientX ?? null; }} onTouchEnd={(e) => { if ((e.target as HTMLElement).closest("[data-report-navigation-lock]")) { touchStart.current = null; return; } if (touchStart.current === null) return; const delta = (e.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current; if (Math.abs(delta) > 45) delta < 0 ? advance() : retreat(); touchStart.current = null; }}>
       {slides.map((slide, index) => <WrappedScreen key={slide.id} slide={slide} active={index === current} index={index} total={slides.length} direction={direction} />)}
       {backHref && <div className="fixed left-5 top-5 z-40 flex items-center gap-3 sm:left-10">
         <a href={backHref} aria-label={isDashboardHref(backHref) ? "Back to dashboard" : "Back home"} className="report-back-button inline-flex h-11 items-center gap-2.5 rounded-full border border-white/14 bg-night/72 px-4 font-mono text-[9px] uppercase tracking-[.16em] text-white/58 backdrop-blur transition hover:border-accent-lit hover:text-white">

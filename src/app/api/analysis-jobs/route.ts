@@ -49,16 +49,18 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as {
     reportId?: unknown;
     participants?: unknown;
+    kind?: unknown;
     uploadBytes?: unknown;
   } | null;
   const reportId = typeof body?.reportId === "string" ? body.reportId : "";
+  const requestedKind = body?.kind === "GROUP" ? "GROUP" : "DIRECT";
   const participants = Array.isArray(body?.participants) && body.participants.length === 2 &&
     body.participants.every((name) => typeof name === "string" && name.trim())
     ? body.participants.map((name) => (name as string).trim().slice(0, 20)) as [string, string]
     : null;
   const uploadBytes = typeof body?.uploadBytes === "number" ? body.uploadBytes : 0;
   const maxBytes = maximumExportBytes();
-  if (!reportId || !participants || !Number.isSafeInteger(uploadBytes) || uploadBytes <= 0 || uploadBytes > maxBytes) {
+  if (!reportId || (requestedKind === "DIRECT" && !participants) || !Number.isSafeInteger(uploadBytes) || uploadBytes <= 0 || uploadBytes > maxBytes) {
     return NextResponse.json(
       { error: `Export must be valid JSON no larger than ${Math.floor(maxBytes / 1024 / 1024)} MiB.` },
       { status: 400 },
@@ -67,9 +69,9 @@ export async function POST(request: Request) {
 
   const report = await prisma.report.findFirst({
     where: { id: reportId, userId: session.user.id, status: "COMPLETE", llm: { equals: Prisma.DbNull } },
-    select: { id: true },
+    select: { id: true, kind: true, participantA: true, participantB: true },
   });
-  if (!report) {
+  if (!report || report.kind !== requestedKind) {
     return NextResponse.json({ error: "That report cannot start AI analysis." }, { status: 409 });
   }
   const [active, recentJobs] = await Promise.all([
@@ -98,8 +100,8 @@ export async function POST(request: Request) {
       reportId,
       storageKey,
       uploadBytes,
-      participantA: participants[0],
-      participantB: participants[1],
+      participantA: participants?.[0] ?? report.participantA,
+      participantB: participants?.[1] ?? report.participantB,
       expiresAt: new Date(Date.now() + ANALYSIS_JOB_TTL_MS),
       stage: "Waiting for the private upload",
     },

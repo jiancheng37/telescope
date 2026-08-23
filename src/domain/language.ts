@@ -1,4 +1,4 @@
-import { logOddsZ, quantile, share } from "./stats";
+import { logOddsZ, maximum, quantile, share } from "./stats";
 import type { EmojiUse, IdiolectMarker, Language, Message, Pair, Side } from "./types";
 
 const WORD = /[a-z']{2,}/g;
@@ -229,7 +229,7 @@ export function buildLanguage(
     p75: quantile(xs, 0.75),
     p90: quantile(xs, 0.9),
     p99: quantile(xs, 0.99),
-    max: xs.length ? Math.max(...xs) : 0,
+    max: maximum(xs),
   });
 
   return {

@@ -1,5 +1,5 @@
 import { SESSION_GAP_MIN } from "./sessions";
-import { mean, median, quantile, ratio, share } from "./stats";
+import { maximum, mean, median, quantile, ratio, share } from "./stats";
 import type {
   LatencyStats,
   DoubleTextingStats,
@@ -94,7 +94,7 @@ export function monologues(messages: Message[]): Pair<MonologueStats> {
     return {
       runs: rs.length,
       meanRunLength: mean(rs),
-      maxRunLength: rs.length ? Math.max(...rs) : 0,
+      maxRunLength: maximum(rs),
       shareOfRunsOver3: share(long.length, rs.length),
       runsOver8: rs.filter((r) => r >= 8).length,
       shareOfMessagesInRuns: share(
@@ -151,6 +151,12 @@ export function doubleTexting(messages: Message[], minGapSeconds = 120): DoubleT
 export function hourHistogram(messages: Message[]): Pair<number[]> {
   const hist = emptyPair<number[]>(() => new Array(24).fill(0));
   for (const m of messages) hist[key(m.who)][new Date(m.ts * 1000).getHours()]++;
+  return hist;
+}
+
+export function weekdayHistogram(messages: Message[]): Pair<number[]> {
+  const hist = emptyPair<number[]>(() => new Array(7).fill(0));
+  for (const m of messages) hist[key(m.who)][new Date(m.ts * 1000).getDay()]++;
   return hist;
 }
 
@@ -225,6 +231,7 @@ export function buildRhythm(messages: Message[]): Rhythm {
     latencyAsymmetry: asymmetry,
     monologues: monologues(messages),
     hourHistogram: hist,
+    weekdayHistogram: weekdayHistogram(messages),
     lateNightShare: lateNightShare(hist),
     longestSilences: silences(messages).slice(0, 15),
     revival: revival(messages),

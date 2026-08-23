@@ -1,0 +1,5 @@
+CREATE TYPE "ReportKind" AS ENUM ('DIRECT', 'GROUP');
+
+ALTER TABLE "reports"
+  ADD COLUMN "kind" "ReportKind" NOT NULL DEFAULT 'DIRECT',
+  ADD COLUMN "participant_count" INTEGER NOT NULL DEFAULT 2;

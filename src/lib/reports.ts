@@ -1,6 +1,8 @@
 import { ReportStatus, Prisma } from "@/generated/prisma/client";
 import type { Analysis } from "@/domain/types";
+import type { GroupAnalysis } from "@/domain/group";
 import type { WirePayload } from "@/ui/wire";
+import type { GroupAiPayload } from "@/llm/group";
 import { prisma } from "@/lib/prisma";
 
 const PROCESSING_TTL_MS = 30 * 60 * 1000;
@@ -29,6 +31,55 @@ export async function saveLocalReport(userId: string, analysis: Analysis) {
       title: data.title,
       participantA: data.participantA,
       participantB: data.participantB,
+      firstTs: data.firstTs,
+      lastTs: data.lastTs,
+      messageCount: data.messageCount,
+      hasAiInsights: false,
+      analysis: data.analysis,
+      llm: Prisma.DbNull,
+      completedAt: data.completedAt,
+    },
+    select: { id: true },
+  });
+}
+
+export async function saveLocalGroupReport(userId: string, analysis: GroupAnalysis) {
+  const safeAnalysis: GroupAnalysis = {
+    ...analysis,
+    extremes: {
+      ...analysis.extremes,
+      longestMessage: analysis.extremes.longestMessage
+        ? { messageId: analysis.extremes.longestMessage.messageId, participantId: analysis.extremes.longestMessage.participantId, chars: analysis.extremes.longestMessage.chars, ts: analysis.extremes.longestMessage.ts }
+        : null,
+    },
+  };
+  const data = {
+    userId,
+    chatId: `group:${analysis.chat.id}`,
+    kind: "GROUP" as const,
+    status: ReportStatus.COMPLETE,
+    title: analysis.chat.name,
+    participantA: analysis.chat.name,
+    participantB: `${analysis.participants.length} people`,
+    participantCount: analysis.participants.length,
+    firstTs: Math.round(analysis.span.firstTs),
+    lastTs: Math.round(analysis.span.lastTs),
+    messageCount: analysis.totalMessages,
+    hasAiInsights: false,
+    analysis: json(safeAnalysis),
+    llm: Prisma.DbNull,
+    completedAt: new Date(),
+  } satisfies Prisma.ReportUncheckedCreateInput;
+  return prisma.report.upsert({
+    where: { userId_chatId: { userId, chatId: data.chatId } },
+    create: data,
+    update: {
+      kind: data.kind,
+      status: data.status,
+      title: data.title,
+      participantA: data.participantA,
+      participantB: data.participantB,
+      participantCount: data.participantCount,
       firstTs: data.firstTs,
       lastTs: data.lastTs,
       messageCount: data.messageCount,
@@ -110,6 +161,20 @@ export async function completeReport(id: string, userId: string, analysis: Analy
       analysis: json(analysis),
       llm: json(llm),
       messageCount: analysis.volume.total,
+      hasAiInsights: true,
+      completedAt: new Date(),
+    },
+  });
+}
+
+export async function completeGroupReport(id: string, userId: string, analysis: GroupAnalysis, llm: GroupAiPayload) {
+  await prisma.report.update({
+    where: { id, userId },
+    data: {
+      status: ReportStatus.COMPLETE,
+      analysis: json(analysis),
+      llm: json(llm),
+      messageCount: analysis.totalMessages,
       hasAiInsights: true,
       completedAt: new Date(),
     },

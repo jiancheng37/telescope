@@ -61,6 +61,14 @@ export function sum(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0);
 }
 
+/** Maximum without spreading an unbounded array into the JavaScript call stack. */
+export function maximum(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  let result = xs[0];
+  for (let i = 1; i < xs.length; i++) if (xs[i] > result) result = xs[i];
+  return result;
+}
+
 /** Guards against division by zero, which shows up constantly in ratio metrics. */
 export function ratio(a: number, b: number): number {
   return b === 0 ? (a === 0 ? 1 : Infinity) : a / b;

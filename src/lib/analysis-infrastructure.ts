@@ -37,6 +37,7 @@ export function maximumExportBytes() {
 }
 
 export function dailyAnalysisLimit() {
+  if (process.env.NODE_ENV !== "production") return Number.POSITIVE_INFINITY;
   const configured = Number(process.env.TELESCOPE_DAILY_ANALYSIS_LIMIT);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : 3;
 }

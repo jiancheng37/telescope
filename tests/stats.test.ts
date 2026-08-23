@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { logOddsZ, median, quantile, ratio, segment, share } from "../src/domain/stats";
+import { logOddsZ, maximum, median, quantile, ratio, segment, share } from "../src/domain/stats";
 
 describe("quantile", () => {
   it("interpolates between neighbours", () => {
@@ -19,6 +19,17 @@ describe("quantile", () => {
   it("hits the endpoints exactly", () => {
     expect(quantile([3, 7, 11], 0)).toBe(3);
     expect(quantile([3, 7, 11], 1)).toBe(11);
+  });
+});
+
+describe("maximum", () => {
+  it("handles arrays larger than the JavaScript argument limit", () => {
+    const values = Array.from({ length: 250_000 }, (_, index) => index - 10);
+    expect(maximum(values)).toBe(249_989);
+  });
+
+  it("returns 0 for an empty series", () => {
+    expect(maximum([])).toBe(0);
   });
 });
 

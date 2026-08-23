@@ -8,6 +8,9 @@ import { dashboardUrl } from "@/lib/app-url";
 
 export interface DashboardConversation {
   id: string;
+  kind: "DIRECT" | "GROUP";
+  title: string;
+  participantCount: number;
   participantA: string;
   participantB: string;
   createdAt: string;
@@ -26,6 +29,7 @@ export interface DashboardConversation {
 export interface DashboardCollection { id: string; name: string; count: number }
 
 type ShareVariant = "insights" | "messages";
+type ConversationKindFilter = "ALL" | "DIRECT" | "GROUP";
 const REPORTS_PER_PAGE = 5;
 const COLLECTIONS_PER_PAGE = 5;
 
@@ -42,6 +46,7 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
   const [reports, setReports] = useState(initialReports);
   const [collections, setCollections] = useState(initialCollections);
   const [collection, setCollection] = useState<string>("all");
+  const [kindFilter, setKindFilter] = useState<ConversationKindFilter>("ALL");
   const [collectionPickerOpen, setCollectionPickerOpen] = useState(false);
   const [collectionPickerQuery, setCollectionPickerQuery] = useState("");
   const [collectionPickerPage, setCollectionPickerPage] = useState(1);
@@ -67,9 +72,10 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return reports
-      .filter((report) => !needle || report.participantA.toLocaleLowerCase().includes(needle))
+      .filter((report) => kindFilter === "ALL" || report.kind === kindFilter)
+      .filter((report) => !needle || report.title.toLocaleLowerCase().includes(needle) || report.participantA.toLocaleLowerCase().includes(needle))
       .filter((report) => collection === "all" || (collection === "unsorted" ? report.collectionIds.length === 0 : report.collectionIds.includes(collection)));
-  }, [collection, query, reports]);
+  }, [collection, kindFilter, query, reports]);
   const pageCount = Math.max(1, Math.ceil(visible.length / REPORTS_PER_PAGE));
   const currentPage = Math.min(page, pageCount);
   const paginatedVisible = visible.slice((currentPage - 1) * REPORTS_PER_PAGE, currentPage * REPORTS_PER_PAGE);
@@ -81,9 +87,9 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
   const paginatedCollections = visibleCollections.slice((currentCollectionPickerPage - 1) * COLLECTIONS_PER_PAGE, currentCollectionPickerPage * COLLECTIONS_PER_PAGE);
   const addableReports = addingToCollection ? reports.filter((report) => !report.collectionIds.includes(addingToCollection.id)) : [];
   const normalisedAddingQuery = addingQuery.trim().toLocaleLowerCase();
-  const visibleAddableReports = addableReports.filter((report) => !normalisedAddingQuery || report.participantA.toLocaleLowerCase().includes(normalisedAddingQuery));
+  const visibleAddableReports = addableReports.filter((report) => !normalisedAddingQuery || report.title.toLocaleLowerCase().includes(normalisedAddingQuery));
   useEffect(() => { onSnapshot?.(reports, collections); }, [collections, onSnapshot, reports]);
-  useEffect(() => { setPage(1); }, [collection, query]);
+  useEffect(() => { setPage(1); }, [collection, kindFilter, query]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
   useEffect(() => {
     if (!collectionPickerOpen) return;
@@ -122,7 +128,13 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
   }, [collectionPickerOpen]);
 
   const flash = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(null), 2400); };
-  const share = async (report: DashboardConversation, variant: ShareVariant = "insights") => {
+  const share = async (report: DashboardConversation, variant?: ShareVariant) => {
+    if (!variant && report.aiReady) {
+      setSharing(report);
+      setMenu(null);
+      return;
+    }
+    const selectedVariant = variant ?? "insights";
     if (!report.shared) {
       try {
         const preferences = JSON.parse(localStorage.getItem("telescope:preferences") ?? "{}") as { confirmSharing?: boolean };
@@ -133,15 +145,18 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
     }
     setWorking(report.id);
     try {
-      let evidence: { doubleTextMessages?: unknown; extremeEvidence?: unknown } | undefined;
-      if (variant === "messages") {
+      let evidence: { doubleTextMessages?: unknown; extremeEvidence?: unknown; groupAiEvidence?: unknown; groupExtremeEvidence?: unknown } | undefined;
+      if (selectedVariant === "messages") {
         try {
-          const doubleTextMessages = localStorage.getItem(`telescope:double-text:${report.id}`);
-          const extremeEvidence = localStorage.getItem(`telescope:extremes:${report.id}`);
-          evidence = {
-            ...(doubleTextMessages ? { doubleTextMessages: JSON.parse(doubleTextMessages) as unknown } : {}),
-            ...(extremeEvidence ? { extremeEvidence: JSON.parse(extremeEvidence) as unknown } : {}),
-          };
+          if (report.kind === "GROUP") {
+            const groupAiEvidence = localStorage.getItem(`telescope:group-ai-evidence:${report.id}`);
+            const groupExtremeEvidence = localStorage.getItem(`telescope:group-extremes:${report.id}`);
+            evidence = { ...(groupAiEvidence ? { groupAiEvidence: JSON.parse(groupAiEvidence) as unknown } : {}), ...(groupExtremeEvidence ? { groupExtremeEvidence: JSON.parse(groupExtremeEvidence) as unknown } : {}) };
+          } else {
+            const doubleTextMessages = localStorage.getItem(`telescope:double-text:${report.id}`);
+            const extremeEvidence = localStorage.getItem(`telescope:extremes:${report.id}`);
+            evidence = { ...(doubleTextMessages ? { doubleTextMessages: JSON.parse(doubleTextMessages) as unknown } : {}), ...(extremeEvidence ? { extremeEvidence: JSON.parse(extremeEvidence) as unknown } : {}) };
+          }
         } catch {
           // The AI excerpts can still be shared if optional local receipts are unavailable.
         }
@@ -149,7 +164,7 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
       const response = await fetch(`/api/reports/${report.id}/share`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ includeMessages: variant === "messages", evidence }),
+        body: JSON.stringify({ includeMessages: selectedVariant === "messages", evidence }),
       });
       if (!response.ok) throw new Error();
       const { path } = await response.json() as { path: string };
@@ -157,11 +172,11 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
       setReports((current) => current.map((item) => item.id === report.id ? {
         ...item,
         shared: true,
-        sharedInsights: variant === "insights" ? true : item.sharedInsights,
-        sharedMessages: variant === "messages" ? true : item.sharedMessages,
+        sharedInsights: selectedVariant === "insights" ? true : item.sharedInsights,
+        sharedMessages: selectedVariant === "messages" ? true : item.sharedMessages,
       } : item));
       setSharing(null);
-      flash(variant === "messages" ? "Link with messages copied." : "Insights-only link copied.");
+      flash(selectedVariant === "messages" ? "Link with messages copied." : "Insights-only link copied.");
     } catch { flash("The share link could not be created."); }
     finally { setWorking(null); setMenu(null); }
   };
@@ -282,6 +297,9 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
     <div className="mt-8 border-b border-ink/14 pb-4 max-[640px]:mt-0">
       <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden"><button type="button" aria-pressed={collection === "all"} onClick={() => setCollection("all")} className={`collection-tab ${collection === "all" ? "collection-tab-active" : ""}`}>All <span>{reports.length}</span></button><button type="button" aria-pressed={collection === "unsorted"} onClick={() => setCollection("unsorted")} className={`collection-tab ${collection === "unsorted" ? "collection-tab-active" : ""}`}>Unsorted <span>{reports.filter((report) => !report.collectionIds.length).length}</span></button><button type="button" title={selectedCustomCollection?.name} aria-haspopup="dialog" aria-expanded={collectionPickerOpen} onClick={() => setCollectionPickerOpen(true)} className={`collection-tab collection-picker-tab justify-between min-[768px]:max-w-[280px] ${selectedCustomCollection ? "collection-tab-active" : ""}`}><span className="text-left leading-tight !text-current">{selectedCustomCollection ? `${selectedCustomCollection.name.slice(0, 12)}${selectedCustomCollection.name.length > 12 ? "…" : ""}` : "Collection"}</span><svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 fill-none stroke-current" strokeWidth="1.5"><path d="m4 6 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg></button><button type="button" aria-label="Create a new collection" title="New collection" onClick={() => { setCollectionName(""); setCollectionPeopleDraft([]); setCollectionPeopleQuery(""); setCollectionEditor({ kind: "create" }); }} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-dashed border-ink/24 text-lg text-ink/48 transition hover:border-accent hover:text-accent">+</button></div>
     </div>
+    <nav aria-label="Conversation type" className="flex items-center gap-6 border-b border-ink/14 pt-4">
+      {([['ALL', 'All', reports.length], ['DIRECT', '1-to-1', reports.filter((report) => report.kind === 'DIRECT').length], ['GROUP', 'Groups', reports.filter((report) => report.kind === 'GROUP').length]] as const).map(([value, label, count]) => <button key={value} type="button" aria-pressed={kindFilter === value} onClick={() => setKindFilter(value)} className={`relative pb-4 font-mono text-[9px] uppercase tracking-[.12em] transition ${kindFilter === value ? "text-accent" : "text-ink/38 hover:text-ink"}`}>{label} <span className="ml-1 opacity-60">{count}</span>{kindFilter === value && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-accent" />}</button>)}
+    </nav>
     <div className="border-b border-ink/14 py-4">
       <label className="flex items-center gap-3"><span className="text-ink/28">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search conversations" className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-ink/32" /></label>
     </div>
@@ -289,9 +307,9 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
     <div className="mt-8 flex flex-wrap items-baseline justify-between gap-3 max-[640px]:mt-4"><h2 className="font-display text-[30px]">Conversations</h2><div className="flex items-center gap-4">{collection !== "all" && collection !== "unsorted" && <button type="button" onClick={() => { setAddingDraft([]); setAddingQuery(""); setAddingToCollection(collections.find((item) => item.id === collection) ?? null); }} className="text-xs font-semibold text-accent transition hover:text-ink">+ Add</button>}<span className="font-mono text-[10px] text-ink/35">{visible.length} of {reports.length}</span></div></div>
     {visible.length ? <><ol className="mt-4 border-t border-ink/14">{paginatedVisible.map((report, index) => <li key={report.id} onDoubleClick={(event) => { if (event.target instanceof Element && event.target.closest("a, button, input, label")) return; window.dispatchEvent(new Event(TELESCOPE_OPEN_REPORT_EVENT)); router.push(`/reports/${report.id}`); }} className="conversation-row relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-ink/14 py-4 min-[640px]:grid-cols-[42px_minmax(0,1fr)_auto] min-[640px]:gap-4 min-[640px]:py-6">
       <span className="hidden font-mono text-[9px] text-ink/25 min-[640px]:block">{String((currentPage - 1) * REPORTS_PER_PAGE + index + 1).padStart(2, "0")}</span>
-      <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-[640px]:gap-x-4"><Link href={`/reports/${report.id}`} className="truncate font-display text-[1.5rem] leading-none transition hover:text-accent min-[640px]:text-[clamp(1.65rem,3vw,2.5rem)]">{report.participantA}</Link><Status report={report} /></div><p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[8px] uppercase tracking-[.1em] text-ink/36 min-[640px]:mt-3 min-[640px]:gap-x-5"><span>{date(report.firstTs)} — {date(report.lastTs)}</span><span>{report.messageCount.toLocaleString()} messages</span><span className="max-[640px]:hidden">Updated {new Date(report.completedAt ?? report.createdAt).toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric" })}</span>{report.shared && <span className="text-accent">Shared</span>}</p></div>
+      <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-[640px]:gap-x-4"><Link href={`/reports/${report.id}`} className="truncate font-display text-[1.5rem] leading-none transition hover:text-accent min-[640px]:text-[clamp(1.65rem,3vw,2.5rem)]">{report.title}</Link><Status report={report} />{report.kind === "GROUP" && <span className="font-mono text-[8px] uppercase tracking-[.12em] text-accent">Group · {report.participantCount} people</span>}</div><p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[8px] uppercase tracking-[.1em] text-ink/36 min-[640px]:mt-3 min-[640px]:gap-x-5"><span>{date(report.firstTs)} — {date(report.lastTs)}</span><span>{report.messageCount.toLocaleString()} messages</span><span className="max-[640px]:hidden">Updated {new Date(report.completedAt ?? report.createdAt).toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric" })}</span>{report.shared && <span className="text-accent">Shared</span>}</p></div>
       <div data-conversation-menu className="flex items-center gap-1.5 min-[640px]:gap-2"><Link href={`/reports/${report.id}`} className="hidden rounded-full border border-ink/14 px-4 py-2 text-xs font-semibold transition hover:border-accent hover:text-accent min-[640px]:block">Open</Link><button type="button" aria-label="Conversation actions" aria-expanded={menu === report.id} onClick={() => setMenu(menu === report.id ? null : report.id)} className="grid h-9 w-9 place-items-center rounded-full border border-ink/14 text-ink/45 transition hover:border-ink/40 hover:text-ink">•••</button></div>
-      {menu === report.id && <div data-conversation-menu className="absolute bottom-16 right-0 z-30 w-52 overflow-hidden rounded-2xl border border-ink/12 bg-surface p-2 text-sm shadow-2xl"><Link href={dashboardUrl("/new")} className="block rounded-xl px-3 py-2.5 hover:bg-shade">Refresh with newer export</Link>{!report.aiReady && report.status !== "PROCESSING" && <Link href={`/reports/${report.id}?insights=1`} className="block rounded-xl px-3 py-2.5 hover:bg-shade">Unlock AI insights</Link>}<button type="button" onClick={() => { setMembershipDraft(report.collectionIds); setOrganising(report); setMenu(null); }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">Add to collections</button><button type="button" disabled={working === report.id} onClick={() => { if (report.aiReady) { setSharing(report); setMenu(null); } else { void share(report); } }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">{report.shared ? "Copy share link" : "Share report"}</button><button type="button" onClick={() => { setNames([report.participantA, report.participantB]); setRenaming(report); setMenu(null); }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">Rename people</button>{collection !== "all" && collection !== "unsorted" && <button type="button" disabled={working === `remove:${report.id}`} onClick={() => { setMenu(null); void removeReportFromCollection(report); }} className="block w-full rounded-xl px-3 py-2.5 text-left text-side-a hover:bg-shade disabled:opacity-35">Remove from collection</button>}<button type="button" disabled={working === report.id} onClick={() => void remove(report)} className="block w-full rounded-xl px-3 py-2.5 text-left text-side-a hover:bg-shade">Delete report</button></div>}
+      {menu === report.id && <div data-conversation-menu className="absolute bottom-16 right-0 z-30 w-52 overflow-hidden rounded-2xl border border-ink/12 bg-surface p-2 text-sm shadow-2xl"><Link href={dashboardUrl("/new")} className="block rounded-xl px-3 py-2.5 hover:bg-shade">Refresh with newer export</Link>{!report.aiReady && report.status !== "PROCESSING" && <Link href={`/reports/${report.id}?insights=1`} className="block rounded-xl px-3 py-2.5 hover:bg-shade">Unlock AI insights</Link>}<button type="button" onClick={() => { setMembershipDraft(report.collectionIds); setOrganising(report); setMenu(null); }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">Add to collections</button><button type="button" disabled={working === report.id} onClick={() => { if (report.kind === "DIRECT" && report.aiReady) { setSharing(report); setMenu(null); } else { void share(report); } }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">{report.shared ? "Copy share link" : "Share report"}</button>{report.kind === "DIRECT" && <button type="button" onClick={() => { setNames([report.participantA, report.participantB]); setRenaming(report); setMenu(null); }} className="block w-full rounded-xl px-3 py-2.5 text-left hover:bg-shade">Rename people</button>}{collection !== "all" && collection !== "unsorted" && <button type="button" disabled={working === `remove:${report.id}`} onClick={() => { setMenu(null); void removeReportFromCollection(report); }} className="block w-full rounded-xl px-3 py-2.5 text-left text-side-a hover:bg-shade disabled:opacity-35">Remove from collection</button>}<button type="button" disabled={working === report.id} onClick={() => void remove(report)} className="block w-full rounded-xl px-3 py-2.5 text-left text-side-a hover:bg-shade">Delete report</button></div>}
     </li>)}</ol>{pageCount > 1 && <nav aria-label="Conversation pages" className="flex items-center justify-between gap-4 border-b border-ink/14 py-5"><button type="button" disabled={currentPage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="text-xs font-semibold text-accent transition hover:text-ink disabled:text-ink/25">← Previous</button><span className="font-mono text-[9px] uppercase tracking-[.12em] text-ink/38">Page {currentPage} of {pageCount}</span><button type="button" disabled={currentPage === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="text-xs font-semibold text-accent transition hover:text-ink disabled:text-ink/25">Next →</button></nav>}</> : <div className="mt-4 border-y border-ink/14 py-14"><p className="font-display text-3xl">No conversations match.</p><p className="mt-2 text-sm text-ink/48">Try another search or clear the current filter.</p></div>}
 
     {collectionPickerOpen && <div className="fixed inset-0 z-[75] flex items-end bg-night/68 backdrop-blur-sm min-[768px]:items-center min-[768px]:justify-center min-[768px]:p-5" role="dialog" aria-modal="true" aria-labelledby="collection-picker-title" onClick={(event) => { if (event.target === event.currentTarget) setCollectionPickerOpen(false); }}>

@@ -5,6 +5,7 @@ import { analysisInfrastructure } from "@/lib/analysis-infrastructure";
 import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import type { WirePayload } from "@/ui/wire";
+import type { GroupAiPayload } from "@/llm/group";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -29,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     error: job.error,
     reportId: job.reportId,
     result: job.status === "COMPLETE" && job.report.llm
-      ? job.report.llm as unknown as WirePayload
+      ? job.report.llm as unknown as WirePayload | GroupAiPayload
       : null,
   });
 }

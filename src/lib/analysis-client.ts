@@ -1,13 +1,14 @@
 "use client";
 
 import type { WirePayload } from "@/ui/wire";
+import type { GroupAiPayload } from "@/llm/group";
 
-type JobState = {
+type JobState<T> = {
   status: "AWAITING_UPLOAD" | "QUEUED" | "PROCESSING" | "COMPLETE" | "FAILED" | "CANCELLED";
   stage: string | null;
   error: string | null;
   reportId: string;
-  result: WirePayload | null;
+  result: T | null;
 };
 
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -17,14 +18,14 @@ async function errorFrom(response: Response, fallback: string) {
   return new Error(body?.error ?? fallback);
 }
 
-export async function waitForAnalysisJob(jobId: string, onProgress?: (note: string) => void, signal?: AbortSignal) {
+export async function waitForAnalysisJob<T = WirePayload>(jobId: string, onProgress?: (note: string) => void, signal?: AbortSignal): Promise<T> {
   let previousStage = "";
   while (true) {
     await wait(2_000);
     if (signal?.aborted) throw new DOMException("Analysis polling was cancelled.", "AbortError");
     const response = await fetch(`/api/analysis-jobs/${jobId}`, { cache: "no-store", signal });
     if (!response.ok) throw await errorFrom(response, `The analysis status could not be read (${response.status}).`);
-    const job = await response.json() as JobState;
+    const job = await response.json() as JobState<T>;
     if (job.stage && job.stage !== previousStage) {
       previousStage = job.stage;
       onProgress?.(job.stage);
@@ -37,6 +38,33 @@ export async function waitForAnalysisJob(jobId: string, onProgress?: (note: stri
       throw new Error(job.error ?? "The analysis job did not complete.");
     }
   }
+}
+
+async function uploadAnalysis<T>({ raw, reportId, participants, kind, onProgress, onJobCreated, signal }: {
+  raw: string;
+  reportId: string;
+  participants?: [string, string];
+  kind: "DIRECT" | "GROUP";
+  onProgress?: (note: string) => void;
+  onJobCreated?: (jobId: string) => void;
+  signal?: AbortSignal;
+}): Promise<T> {
+  const uploadBytes = new TextEncoder().encode(raw).byteLength;
+  onProgress?.("Preparing a private upload");
+  const created = await fetch("/api/analysis-jobs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ reportId, participants, kind, uploadBytes }),
+  });
+  if (!created.ok) throw await errorFrom(created, `The analysis service returned ${created.status}.`);
+  const { jobId, uploadUrl } = await created.json() as { jobId: string; uploadUrl: string };
+  onJobCreated?.(jobId);
+  onProgress?.("Uploading the conversation privately");
+  const uploaded = await fetch(uploadUrl, { method: "PUT", headers: { "content-type": "application/json" }, body: raw });
+  if (!uploaded.ok) throw new Error(`The private upload failed (${uploaded.status}).`);
+  const queued = await fetch(`/api/analysis-jobs/${jobId}/uploaded`, { method: "POST" });
+  if (!queued.ok) throw await errorFrom(queued, `The analysis job could not be queued (${queued.status}).`);
+  return waitForAnalysisJob<T>(jobId, onProgress, signal);
 }
 
 export async function requestAnalysis({
@@ -54,29 +82,11 @@ export async function requestAnalysis({
   onJobCreated?: (jobId: string) => void;
   signal?: AbortSignal;
 }): Promise<WirePayload> {
-  const uploadBytes = new TextEncoder().encode(raw).byteLength;
-  onProgress?.("Preparing a private upload");
-  const created = await fetch("/api/analysis-jobs", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ reportId, participants, uploadBytes }),
-  });
-  if (!created.ok) throw await errorFrom(created, `The analysis service returned ${created.status}.`);
-  const { jobId, uploadUrl } = await created.json() as { jobId: string; uploadUrl: string };
-  onJobCreated?.(jobId);
+  return uploadAnalysis({ raw, reportId, participants, kind: "DIRECT", onProgress, onJobCreated, signal });
+}
 
-  onProgress?.("Uploading the conversation privately");
-  const uploaded = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: raw,
-  });
-  if (!uploaded.ok) throw new Error(`The private upload failed (${uploaded.status}).`);
-
-  const queued = await fetch(`/api/analysis-jobs/${jobId}/uploaded`, { method: "POST" });
-  if (!queued.ok) throw await errorFrom(queued, `The analysis job could not be queued (${queued.status}).`);
-
-  return waitForAnalysisJob(jobId, onProgress, signal);
+export async function requestGroupAnalysis(options: Omit<Parameters<typeof uploadAnalysis<GroupAiPayload>>[0], "kind" | "participants">): Promise<GroupAiPayload> {
+  return uploadAnalysis<GroupAiPayload>({ ...options, kind: "GROUP" });
 }
 
 export async function cancelAnalysisJob(jobId: string) {

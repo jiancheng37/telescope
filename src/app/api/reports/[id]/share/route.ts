@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const body = await request.json().catch(() => null) as { includeMessages?: unknown; evidence?: unknown } | null;
   const hasMessagePreference = typeof body?.includeMessages === "boolean";
-  const report = await prisma.report.findFirst({ where: { id, userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } }, select: { shareToken: true, shareMessagesToken: true, hasAiInsights: true, sharedEvidence: true } });
+  const report = await prisma.report.findFirst({ where: { id, userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } }, select: { kind: true, shareToken: true, shareMessagesToken: true, hasAiInsights: true, sharedEvidence: true } });
   if (!report) return NextResponse.json({ error: "Report not found." }, { status: 404 });
 
   const messagesVisible = hasMessagePreference && report.hasAiInsights && body?.includeMessages === true;
@@ -26,7 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       data: {
         ...(messagesVisible ? {
           shareMessagesToken: shareToken,
-          sharedMessagesVisible: false,
+          sharedMessagesVisible: true,
           sharedEvidence: messagesVisible ? suppliedEvidence ?? report.sharedEvidence ?? Prisma.DbNull : Prisma.DbNull,
         } : { shareToken, sharedMessagesVisible: false }),
       },
