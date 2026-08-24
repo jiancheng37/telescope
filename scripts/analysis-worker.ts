@@ -94,7 +94,9 @@ async function processJob(jobId: string) {
       const analysis = analyzeGroup(selected);
       console.log(`[analysis-worker] job ${job.id} parsed ${analysis.totalMessages.toLocaleString()} group messages`);
       const payload = await runGroupReading(selected, analysis, { onProgress: progress });
-      await completeGroupReport(job.reportId, job.userId, analysis, payload);
+      const evidenceIds = new Set([...(payload.topics ?? payload.themes ?? []), ...payload.roles, ...(payload.eras ?? []), ...(payload.lore ?? [])].flatMap((item) => item.evidenceMessageIds));
+      const groupAiEvidence = selected.messages.filter((message) => evidenceIds.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
+      await completeGroupReport(job.reportId, job.userId, analysis, payload, groupAiEvidence);
     } else {
       const { parsed, analysis } = analyze(decoded);
       console.log(`[analysis-worker] job ${job.id} parsed ${analysis.volume.total.toLocaleString()} messages`);

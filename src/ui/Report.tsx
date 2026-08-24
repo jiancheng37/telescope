@@ -31,6 +31,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Analysis, Chapter, Pair } from "@/domain/types";
+import { syncReportEvidence } from "@/lib/report-evidence-client";
 import {
   assignEvidence,
   type DeckCard,
@@ -2131,6 +2132,18 @@ export function Report({
       if (saved) setStoredStickerVisuals(JSON.parse(saved) as LocalStickerVisuals);
     } catch { /* Sticker art is optional browser-local context. */ }
   }, [localEvidenceKey, stickerVisuals]);
+  useEffect(() => {
+    if (!localEvidenceKey) return;
+    try {
+      const read = (key: string) => { const value = localStorage.getItem(key); return value ? JSON.parse(value) as unknown : undefined; };
+      const evidence = {
+        doubleText: read(`telescope:double-text:${localEvidenceKey}`),
+        extremes: read(`telescope:extremes:${localEvidenceKey}`),
+        stickers: read(`telescope:stickers:${localEvidenceKey}`),
+      };
+      if (Object.values(evidence).some((value) => value !== undefined)) void syncReportEvidence(localEvidenceKey, evidence).catch(() => undefined);
+    } catch { /* Older browser-local evidence remains usable if syncing fails. */ }
+  }, [localEvidenceKey]);
   const visibleDoubleTextMessages = doubleTextMessages ?? storedDoubleTextMessages;
   const visibleExtremeEvidence = extremeEvidence ?? storedExtremeEvidence;
   const visibleStickerVisuals = stickerVisuals ?? storedStickerVisuals;

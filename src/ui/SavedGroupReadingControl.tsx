@@ -9,6 +9,7 @@ import { filesFromDrop, resultJsonFrom } from "./sticker-assets";
 import { cancelAnalysisJob, requestGroupAnalysis, waitForAnalysisJob } from "@/lib/analysis-client";
 import type { GroupAiPayload } from "@/llm/group";
 import { TELESCOPE_AI_PROGRESS_EVENT, type AiProgressState } from "./Report";
+import { syncReportEvidence } from "@/lib/report-evidence-client";
 
 type State = { kind: "idle" } | { kind: "working"; note: string } | { kind: "error"; message: string };
 const GROUP_STAGES = ["preparing the private upload", "reading the room", "checking source messages", "naming eras and lore", "assembling the report"];
@@ -58,6 +59,7 @@ export function SavedGroupReadingControl({ reportId, processing = false, startOp
       const evidence = parsed.messages.filter((message) => ids.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
       if (evidence.length) {
         try { localStorage.setItem(`telescope:group-ai-evidence:${reportId}`, JSON.stringify(evidence)); } catch { /* The insights remain usable without browser-local excerpts. */ }
+        await syncReportEvidence(reportId, { groupAi: evidence });
       }
       announce({ kind: "done" });
       setActiveJobId(null);
@@ -95,7 +97,7 @@ export function SavedGroupReadingControl({ reportId, processing = false, startOp
         <button type="button" onClick={() => input.current?.click()} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); void filesFromDrop(event.dataTransfer).then((files) => files.length && void choose(files)); }} className={`mt-6 flex min-h-[190px] w-full flex-col items-center justify-center rounded-[18px] border border-dashed px-6 py-7 text-center transition ${dragging ? "border-accent-lit bg-accent-lit/12" : "border-white/22 bg-white/[.035] hover:border-accent-lit/70"}`}><span className="grid h-13 w-13 place-items-center rounded-full border border-accent-lit/55 text-xl text-accent-lit">↗</span><span className="mt-4 font-display text-[clamp(1.7rem,5vw,2.4rem)]">Choose the group export</span><span className="mt-3 text-xs text-white/38">The same result.json used to create this report</span></button>
         {state.kind === "working" && <p className="mt-4 font-mono text-[9px] uppercase tracking-[.12em] text-accent-lit">{state.note}</p>}
         {state.kind === "error" && <p className="mt-4 text-sm text-side-a">{state.message}</p>}
-        <p className="mt-6 border-t border-white/12 pt-4 text-xs leading-relaxed text-white/36">This step temporarily sends the raw conversation to the analysis server. It is deleted after processing and is never stored in the saved report; only the written insights and source message IDs are saved.</p>
+        <p className="mt-6 border-t border-white/12 pt-4 text-xs leading-relaxed text-white/36">This step temporarily sends the raw conversation to the analysis server. It is deleted after processing; only the written insights and the small set of quoted evidence messages are saved with your private report.</p>
       </section>
     </div>, document.body)}
   </>;

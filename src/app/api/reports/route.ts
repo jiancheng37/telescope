@@ -5,6 +5,7 @@ import type { GroupAnalysis } from "@/domain/group";
 import { saveLocalGroupReport, saveLocalReport } from "@/lib/reports";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import type { ReportEvidence } from "@/lib/report-evidence";
 
 export async function GET() {
   const session = await auth();
@@ -51,13 +52,17 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in to save reports." }, { status: 401 });
 
-  const analysis: unknown = await request.json().catch(() => null);
+  const submitted: unknown = await request.json().catch(() => null);
+  const wrapped = submitted && typeof submitted === "object" && "analysis" in submitted
+    ? submitted as { analysis?: unknown; evidence?: ReportEvidence }
+    : null;
+  const analysis = wrapped?.analysis ?? submitted;
   if (!looksLikeAnalysis(analysis) && !looksLikeGroupAnalysis(analysis)) {
     return NextResponse.json({ error: "That analysis could not be saved." }, { status: 400 });
   }
 
   const report = looksLikeGroupAnalysis(analysis)
-    ? await saveLocalGroupReport(session.user.id, analysis)
-    : await saveLocalReport(session.user.id, analysis);
+    ? await saveLocalGroupReport(session.user.id, analysis, wrapped?.evidence)
+    : await saveLocalReport(session.user.id, analysis, wrapped?.evidence);
   return NextResponse.json({ id: report.id }, { status: 201 });
 }

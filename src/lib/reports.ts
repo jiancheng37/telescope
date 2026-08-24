@@ -4,10 +4,12 @@ import type { GroupAnalysis } from "@/domain/group";
 import type { WirePayload } from "@/ui/wire";
 import type { GroupAiPayload } from "@/llm/group";
 import { prisma } from "@/lib/prisma";
+import { reportEvidence, type ReportEvidence } from "@/lib/report-evidence";
 
 const PROCESSING_TTL_MS = 30 * 60 * 1000;
 
-export async function saveLocalReport(userId: string, analysis: Analysis) {
+export async function saveLocalReport(userId: string, analysis: Analysis, evidence?: ReportEvidence) {
+  const privateEvidence = reportEvidence(evidence);
   const data = {
       userId,
       chatId: String(analysis.chat.id),
@@ -21,6 +23,7 @@ export async function saveLocalReport(userId: string, analysis: Analysis) {
       hasAiInsights: false,
       analysis: json(analysis),
       llm: Prisma.DbNull,
+      privateEvidence: privateEvidence ?? Prisma.DbNull,
       completedAt: new Date(),
     } satisfies Prisma.ReportUncheckedCreateInput;
   return prisma.report.upsert({
@@ -37,13 +40,15 @@ export async function saveLocalReport(userId: string, analysis: Analysis) {
       hasAiInsights: false,
       analysis: data.analysis,
       llm: Prisma.DbNull,
+      ...(privateEvidence ? { privateEvidence } : {}),
       completedAt: data.completedAt,
     },
     select: { id: true },
   });
 }
 
-export async function saveLocalGroupReport(userId: string, analysis: GroupAnalysis) {
+export async function saveLocalGroupReport(userId: string, analysis: GroupAnalysis, evidence?: ReportEvidence) {
+  const privateEvidence = reportEvidence(evidence);
   const safeAnalysis: GroupAnalysis = {
     ...analysis,
     extremes: {
@@ -68,6 +73,7 @@ export async function saveLocalGroupReport(userId: string, analysis: GroupAnalys
     hasAiInsights: false,
     analysis: json(safeAnalysis),
     llm: Prisma.DbNull,
+    privateEvidence: privateEvidence ?? Prisma.DbNull,
     completedAt: new Date(),
   } satisfies Prisma.ReportUncheckedCreateInput;
   return prisma.report.upsert({
@@ -86,6 +92,7 @@ export async function saveLocalGroupReport(userId: string, analysis: GroupAnalys
       hasAiInsights: false,
       analysis: data.analysis,
       llm: Prisma.DbNull,
+      ...(privateEvidence ? { privateEvidence } : {}),
       completedAt: data.completedAt,
     },
     select: { id: true },
@@ -167,17 +174,24 @@ export async function completeReport(id: string, userId: string, analysis: Analy
   });
 }
 
-export async function completeGroupReport(id: string, userId: string, analysis: GroupAnalysis, llm: GroupAiPayload) {
-  await prisma.report.update({
-    where: { id, userId },
-    data: {
+export async function completeGroupReport(id: string, userId: string, analysis: GroupAnalysis, llm: GroupAiPayload, groupAi?: unknown) {
+  await prisma.$transaction(async (tx) => {
+    const saved = await tx.report.findUnique({ where: { id, userId }, select: { privateEvidence: true } });
+    const existing = saved?.privateEvidence && typeof saved.privateEvidence === "object" && !Array.isArray(saved.privateEvidence)
+      ? saved.privateEvidence as Record<string, unknown>
+      : {};
+    await tx.report.update({
+      where: { id, userId },
+      data: {
       status: ReportStatus.COMPLETE,
       analysis: json(analysis),
       llm: json(llm),
+      privateEvidence: reportEvidence({ ...existing, ...(groupAi ? { groupAi } : {}) }) ?? Prisma.DbNull,
       messageCount: analysis.totalMessages,
       hasAiInsights: true,
       completedAt: new Date(),
-    },
+      },
+    });
   });
 }
 

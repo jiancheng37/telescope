@@ -7,6 +7,7 @@ import type { GroupAiPayload } from "@/llm/group";
 import { AiProgressSignal, TELESCOPE_AI_PROGRESS_EVENT, type AiProgressState } from "./Report";
 import type { LocalGroupStickerVisuals, LocalStickerVisual } from "./sticker-assets";
 import { FittedQuote } from "./FittedQuote";
+import { syncReportEvidence } from "@/lib/report-evidence-client";
 
 const formatDate = (ts: number) => new Date(ts * 1000).toLocaleDateString("en", { month: "short", year: "numeric" });
 type GroupSlide = { id: string; label: string; tone: "light" | "night"; content: ReactNode };
@@ -223,6 +224,19 @@ export function GroupReport({ analysis, ai = null, aiControl, aiEvidence, endCon
     if (stickerVisuals || !localEvidenceKey) return;
     try { const saved = localStorage.getItem(`telescope:group-stickers:${localEvidenceKey}`); if (saved) setStoredStickerVisuals(JSON.parse(saved) as LocalGroupStickerVisuals); } catch { /* Browser-local sticker artwork is optional. */ }
   }, [localEvidenceKey, stickerVisuals]);
+  useEffect(() => {
+    if (!localEvidenceKey) return;
+    try {
+      const read = (key: string) => { const value = localStorage.getItem(key); return value ? JSON.parse(value) as unknown : undefined; };
+      const evidence = {
+        extremes: read(`telescope:group-extremes:${localEvidenceKey}`),
+        groupAi: read(`telescope:group-ai-evidence:${localEvidenceKey}`),
+        doubleText: read(`telescope:group-double-text:${localEvidenceKey}`),
+        stickers: read(`telescope:group-stickers:${localEvidenceKey}`),
+      };
+      if (Object.values(evidence).some((value) => value !== undefined)) void syncReportEvidence(localEvidenceKey, evidence).catch(() => undefined);
+    } catch { /* Older browser-local evidence remains usable if syncing fails. */ }
+  }, [localEvidenceKey]);
   const leave = useCallback(() => {
     if (onBack) onBack();
     else if (backHref) window.location.assign(backHref);

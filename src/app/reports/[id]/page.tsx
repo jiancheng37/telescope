@@ -21,13 +21,14 @@ export default async function SavedReportPage({ params, searchParams }: { params
   const query = await searchParams;
   const [saved, profile] = await Promise.all([prisma.report.findFirst({
     where: { id, userId: session.user.id, status: { in: ["COMPLETE", "PROCESSING"] }, analysis: { not: Prisma.DbNull } },
-    select: { analysis: true, llm: true, participantA: true, participantB: true, status: true, sharedMessagesVisible: true, kind: true },
+    select: { analysis: true, llm: true, privateEvidence: true, participantA: true, participantB: true, status: true, sharedMessagesVisible: true, kind: true },
   }), prisma.user.findUnique({ where: { id: session.user.id }, select: { reportName: true } })]);
   if (!saved?.analysis) notFound();
 
   if (saved.kind === "GROUP") {
     const ai = saved.llm ? saved.llm as unknown as GroupAiPayload : null;
-    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={ai} aiControl={!ai ? <SavedGroupReadingControl reportId={id} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} backHref={dashboardUrl()} saved localEvidenceKey={id} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(ai)} initialIncludeMessages={saved.sharedMessagesVisible} evidenceKind="group" />} />;
+    const evidence = saved.privateEvidence && typeof saved.privateEvidence === "object" ? saved.privateEvidence as { groupAi?: unknown; extremes?: unknown; doubleText?: unknown; stickers?: unknown } : null;
+    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={ai} aiEvidence={evidence?.groupAi as never} extremeEvidence={evidence?.extremes as never} doubleTextEvidence={evidence?.doubleText as never} stickerVisuals={evidence?.stickers as never} aiControl={!ai ? <SavedGroupReadingControl reportId={id} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} backHref={dashboardUrl()} saved localEvidenceKey={id} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(ai)} initialIncludeMessages={saved.sharedMessagesVisible} evidenceKind="group" />} />;
   }
 
   const analysis = saved.analysis as unknown as Analysis;
@@ -35,5 +36,6 @@ export default async function SavedReportPage({ params, searchParams }: { params
   if (accountName) analysis.chat.participants = [saved.participantA, accountName];
   const llm = saved.llm ? (saved.llm as unknown as WirePayload) : null;
   const participants: [string, string] = [saved.participantA, accountName || saved.participantB];
-  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(llm)} initialIncludeMessages={saved.sharedMessagesVisible} />} backHref={dashboardUrl()} promptInsightsAtEnd localEvidenceKey={id} />;
+  const evidence = saved.privateEvidence && typeof saved.privateEvidence === "object" ? saved.privateEvidence as { extremes?: unknown; doubleText?: unknown; stickers?: unknown } : null;
+  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} doubleTextMessages={evidence?.doubleText as never} extremeEvidence={evidence?.extremes as never} stickerVisuals={evidence?.stickers as never} control={!llm ? <SavedReportReadingControl reportId={id} participants={participants} processing={saved.status === "PROCESSING"} startOpen={query.insights === "1"} /> : undefined} coverActions={<ReportActions reportId={id} canConfigureMessages={Boolean(llm)} initialIncludeMessages={saved.sharedMessagesVisible} />} backHref={dashboardUrl()} promptInsightsAtEnd localEvidenceKey={id} />;
 }

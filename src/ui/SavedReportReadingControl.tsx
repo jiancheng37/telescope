@@ -8,6 +8,7 @@ import { TELESCOPE_AI_PROGRESS_EVENT, type AiProgressState } from "./Report";
 import { parseExport } from "@/domain/parse";
 import { buildStickerVisuals, filesFromDrop, resultJsonFrom, TELESCOPE_STICKER_VISUALS_EVENT } from "./sticker-assets";
 import { cancelAnalysisJob, requestAnalysis, waitForAnalysisJob } from "@/lib/analysis-client";
+import { syncReportEvidence } from "@/lib/report-evidence-client";
 
 type State =
   | { kind: "idle" }
@@ -97,6 +98,7 @@ export function SavedReportReadingControl({
       const visuals = await buildStickerVisuals(parsed, files);
       if (visuals) {
         try { localStorage.setItem(`telescope:stickers:${reportId}`, JSON.stringify(visuals)); } catch { /* AI analysis can continue without persisted art. */ }
+        void syncReportEvidence(reportId, { stickers: visuals }).catch(() => undefined);
         window.dispatchEvent(new CustomEvent(TELESCOPE_STICKER_VISUALS_EVENT, { detail: visuals }));
       }
       setState({ kind: "working", note: "Preparing the private upload" });

@@ -32,6 +32,7 @@ import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
 import { requestAnalysis, requestGroupAnalysis } from "@/lib/analysis-client";
 import type { GroupAiPayload } from "@/llm/group";
 import { applicationUrl, dashboardUrl } from "@/lib/app-url";
+import { syncableReportEvidence } from "@/lib/report-evidence-client";
 
 const Report = lazy(() => import("@/ui/Report").then((module) => ({ default: module.Report })));
 const ReportActions = lazy(() => import("@/ui/ReportActions").then((module) => ({ default: module.ReportActions })));
@@ -298,7 +299,8 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       let reportId: string | null = null;
       if (viewer) {
         setPhase({ kind: "working", note: "saving your group report" });
-        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analysis) });
+        const evidence = syncableReportEvidence({ extremes: extremeEvidence, doubleText: doubleTextEvidence, stickers: stickerVisuals });
+        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ analysis, evidence }) });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
           invalidateDashboardData();
@@ -361,10 +363,11 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       let reportId: string | null = null;
       if (viewer) {
         setPhase({ kind: "working", note: "saving your report" });
+        const evidence = syncableReportEvidence({ doubleText: doubleTextMessages, extremes: extremeEvidence, stickers: stickerVisuals });
         const response = await fetch("/api/reports", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(analysis),
+          body: JSON.stringify({ analysis, evidence }),
         });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
