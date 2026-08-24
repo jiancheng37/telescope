@@ -32,7 +32,7 @@ import { TELESCOPE_OPEN_REPORT_EVENT } from "@/app/app/AppShell";
 import { requestAnalysis, requestGroupAnalysis } from "@/lib/analysis-client";
 import type { GroupAiPayload } from "@/llm/group";
 import { applicationUrl, dashboardUrl } from "@/lib/app-url";
-import { syncableReportEvidence } from "@/lib/report-evidence-client";
+import { syncReportEvidence, syncableReportEvidence } from "@/lib/report-evidence-client";
 
 const Report = lazy(() => import("@/ui/Report").then((module) => ({ default: module.Report })));
 const ReportActions = lazy(() => import("@/ui/ReportActions").then((module) => ({ default: module.ReportActions })));
@@ -300,9 +300,10 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       if (viewer) {
         setPhase({ kind: "working", note: "saving your group report" });
         const evidence = syncableReportEvidence({ extremes: extremeEvidence, doubleText: doubleTextEvidence, stickers: stickerVisuals });
-        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ analysis, evidence }) });
+        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analysis) });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
+          void syncReportEvidence(reportId, evidence).catch(() => undefined);
           invalidateDashboardData();
         } else {
           const body = await response.json().catch(() => null) as { error?: string } | null;
@@ -367,10 +368,11 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
         const response = await fetch("/api/reports", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ analysis, evidence }),
+          body: JSON.stringify(analysis),
         });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
+          void syncReportEvidence(reportId, evidence).catch(() => undefined);
           invalidateDashboardData();
         } else {
           const body = (await response.json().catch(() => null)) as { error?: string } | null;
