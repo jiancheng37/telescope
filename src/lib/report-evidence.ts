@@ -7,15 +7,20 @@ export type ReportEvidence = {
   groupAi?: unknown;
 };
 
-const ALLOWED_KEYS = ["doubleText", "extremes", "stickers", "groupAi"] as const;
+// Keep source messages ahead of optional artwork when a report's private
+// evidence approaches the storage cap. This ordering also matches the client.
+const ALLOWED_KEYS = ["groupAi", "extremes", "doubleText", "stickers"] as const;
 const MAX_EVIDENCE_BYTES = 4 * 1024 * 1024;
 
 export function reportEvidence(value: unknown): Prisma.InputJsonValue | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
-  const selected = Object.fromEntries(ALLOWED_KEYS.flatMap((key) => source[key] === undefined ? [] : [[key, source[key]]]));
+  const selected: Record<string, unknown> = {};
+  for (const key of ALLOWED_KEYS) {
+    if (source[key] === undefined) continue;
+    const candidate = { ...selected, [key]: source[key] };
+    if (Buffer.byteLength(JSON.stringify(candidate), "utf8") <= MAX_EVIDENCE_BYTES) selected[key] = source[key];
+  }
   if (Object.keys(selected).length === 0) return null;
-  const serialized = JSON.stringify(selected);
-  if (Buffer.byteLength(serialized, "utf8") > MAX_EVIDENCE_BYTES) return null;
-  return JSON.parse(serialized) as Prisma.InputJsonValue;
+  return JSON.parse(JSON.stringify(selected)) as Prisma.InputJsonValue;
 }

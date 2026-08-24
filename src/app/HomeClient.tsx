@@ -327,7 +327,12 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
           ai = await requestGroupAnalysis({ raw, reportId, onProgress: (note) => setPhase({ kind: "working", note }) });
           const ids = new Set([...(ai.topics ?? ai.themes ?? []), ...ai.roles, ...(ai.eras ?? []), ...(ai.lore ?? [])].flatMap((item) => item.evidenceMessageIds));
           aiEvidence = selectedGroup.messages.filter((message) => ids.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
-          if (aiEvidence.length) localStorage.setItem(`telescope:group-ai-evidence:${reportId}`, JSON.stringify(aiEvidence));
+          if (aiEvidence.length) {
+            localStorage.setItem(`telescope:group-ai-evidence:${reportId}`, JSON.stringify(aiEvidence));
+            // This final write happens after the worker completes, preventing
+            // the earlier numerical-evidence sync from winning a write race.
+            await syncReportEvidence(reportId, { groupAi: aiEvidence });
+          }
         } catch (error) {
           setSaveWarning(error instanceof Error ? `The group report is ready, but AI insights failed: ${error.message}` : "The group report is ready, but AI insights failed.");
         }
