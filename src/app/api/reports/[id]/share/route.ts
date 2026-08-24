@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : null;
     const accountEvidence = privateEvidence
       ? report.kind === "GROUP"
-        ? { groupAiEvidence: privateEvidence.groupAi, groupExtremeEvidence: privateEvidence.extremes }
+        ? { groupAiEvidence: privateEvidence.groupAi, groupExtremeEvidence: privateEvidence.extremes, groupDoubleTextEvidence: privateEvidence.doubleText }
         : { doubleTextMessages: privateEvidence.doubleText, extremeEvidence: privateEvidence.extremes }
       : undefined;
     const requestedEvidence = {

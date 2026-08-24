@@ -29,14 +29,17 @@ function hideMessageExcerpts(llm: WirePayload): WirePayload {
 
 export default async function SharedReportPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const saved = await prisma.report.findFirst({ where: { OR: [{ shareToken: token }, { shareMessagesToken: token }] }, select: { kind: true, analysis: true, llm: true, participantA: true, participantB: true, shareToken: true, shareMessagesToken: true, sharedMessagesVisible: true, sharedEvidence: true, user: { select: { reportName: true, name: true } } } });
+  const saved = await prisma.report.findFirst({ where: { OR: [{ shareToken: token }, { shareMessagesToken: token }] }, select: { kind: true, analysis: true, llm: true, participantA: true, participantB: true, shareToken: true, shareMessagesToken: true, sharedMessagesVisible: true, sharedEvidence: true, privateEvidence: true, user: { select: { reportName: true, name: true } } } });
   if (!saved?.analysis) notFound();
   if (saved.kind === "GROUP") {
     const messagesVisible = saved.shareMessagesToken === token;
-    const evidence = messagesVisible && saved.sharedEvidence && typeof saved.sharedEvidence === "object" ? saved.sharedEvidence as { groupAiEvidence?: LocalGroupMessage[]; groupExtremeEvidence?: LocalGroupExtremeEvidence } : null;
+    const evidence = messagesVisible && saved.sharedEvidence && typeof saved.sharedEvidence === "object" ? saved.sharedEvidence as { groupAiEvidence?: LocalGroupMessage[]; groupExtremeEvidence?: LocalGroupExtremeEvidence; groupDoubleTextEvidence?: LocalGroupMessage[] } : null;
+    const privateEvidence = messagesVisible && saved.privateEvidence && typeof saved.privateEvidence === "object" && !Array.isArray(saved.privateEvidence)
+      ? saved.privateEvidence as { groupAi?: LocalGroupMessage[]; extremes?: LocalGroupExtremeEvidence; doubleText?: LocalGroupMessage[] }
+      : null;
     const storedGroupAi = saved.llm ? saved.llm as unknown as GroupAiPayload : null;
     const groupAi = storedGroupAi && !messagesVisible ? { ...storedGroupAi, wildTexts: [] } : storedGroupAi;
-    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={groupAi} aiEvidence={evidence?.groupAiEvidence} extremeEvidence={evidence?.groupExtremeEvidence} backHref="/" returnLabel="Home" visibilityLabel={messagesVisible ? "Shared group report · evidence included" : "Shared group report · messages hidden"} coverActions={<ReportActions publicPath={`/share/${token}`} />} />;
+    return <GroupReport analysis={saved.analysis as unknown as GroupAnalysis} ai={groupAi} aiEvidence={evidence?.groupAiEvidence ?? privateEvidence?.groupAi} extremeEvidence={evidence?.groupExtremeEvidence ?? privateEvidence?.extremes} doubleTextEvidence={evidence?.groupDoubleTextEvidence ?? privateEvidence?.doubleText} backHref="/" returnLabel="Home" visibilityLabel={messagesVisible ? "Shared group report · evidence included" : "Shared group report · messages hidden"} coverActions={<ReportActions publicPath={`/share/${token}`} />} />;
   }
   const analysis = saved.analysis as unknown as Analysis;
   analysis.chat.participants = [saved.participantA, saved.user.reportName?.trim() || saved.user.name?.trim() || saved.participantB];
@@ -46,5 +49,8 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
   const sharedEvidence = messagesVisible && saved.sharedEvidence && typeof saved.sharedEvidence === "object"
     ? saved.sharedEvidence as { doubleTextMessages?: LocalStreakMessage[]; extremeEvidence?: LocalExtremeEvidence }
     : null;
-  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} doubleTextMessages={sharedEvidence?.doubleTextMessages} extremeEvidence={sharedEvidence?.extremeEvidence} coverActions={<ReportActions publicPath={`/share/${token}`} />} backHref={null} visibilityLabel="Shared report" />;
+  const privateEvidence = messagesVisible && saved.privateEvidence && typeof saved.privateEvidence === "object" && !Array.isArray(saved.privateEvidence)
+    ? saved.privateEvidence as { doubleText?: LocalStreakMessage[]; extremes?: LocalExtremeEvidence }
+    : null;
+  return <Report analysis={analysis} deck={buildDeck(analysis)} llm={llm} doubleTextMessages={sharedEvidence?.doubleTextMessages ?? privateEvidence?.doubleText} extremeEvidence={sharedEvidence?.extremeEvidence ?? privateEvidence?.extremes} coverActions={<ReportActions publicPath={`/share/${token}`} />} backHref={null} visibilityLabel="Shared report" />;
 }
