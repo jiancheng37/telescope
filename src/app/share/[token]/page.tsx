@@ -43,7 +43,7 @@ export default async function SharedReportPage({ params }: { params: Promise<{ t
   }
   const analysis = saved.analysis as unknown as Analysis;
   analysis.chat.participants = [saved.participantA, saved.user.reportName?.trim() || saved.user.name?.trim() || saved.participantB];
-  const messagesVisible = saved.shareMessagesToken === token || (saved.shareToken === token && saved.sharedMessagesVisible);
+  const messagesVisible = saved.shareMessagesToken === token;
   const storedLlm = saved.llm ? (saved.llm as unknown as WirePayload) : null;
   const llm = storedLlm && !messagesVisible ? hideMessageExcerpts(storedLlm) : storedLlm;
   const sharedEvidence = messagesVisible && saved.sharedEvidence && typeof saved.sharedEvidence === "object"

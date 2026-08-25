@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeGroup, isGroupExport, parseGroupExport, selectGroupParticipants } from "../src/domain/group";
+import { analyzeGroup, groupParticipantSetKey, isGroupExport, parseGroupExport, selectGroupParticipants } from "../src/domain/group";
 import type { RawExport, RawMessage } from "../src/domain/types";
 
 function groupExport(): RawExport {
@@ -18,6 +18,12 @@ function groupExport(): RawExport {
 }
 
 describe("group exports", () => {
+  it("identifies a participant set independently of ordering", () => {
+    expect(groupParticipantSetKey([{ id: "user3" }, { id: "user1" }, { id: "user2" }])).toBe('["user1","user2","user3"]');
+    expect(groupParticipantSetKey([{ id: "user1" }, { id: "user2" }, { id: "user3" }])).toBe('["user1","user2","user3"]');
+    expect(groupParticipantSetKey([{ id: "user1" }, { id: "user2" }, { id: "user4" }])).not.toBe('["user1","user2","user3"]');
+  });
+
   it("detects supported Telegram group types without treating direct chats as groups", () => {
     expect(isGroupExport(groupExport())).toBe(true);
     expect(isGroupExport({ ...groupExport(), type: "personal_chat" })).toBe(false);

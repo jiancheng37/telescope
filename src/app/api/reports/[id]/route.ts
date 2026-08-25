@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import type { Analysis } from "@/domain/types";
+import { deleteAnalysisUploads } from "@/lib/analysis-upload-cleanup";
 
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
@@ -27,6 +28,16 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Sign in to delete reports." }, { status: 401 });
   const { id } = await params;
+  const jobs = await prisma.analysisJob.findMany({
+    where: { reportId: id, userId: session.user.id },
+    select: { storageKey: true },
+  });
+  try {
+    await deleteAnalysisUploads(jobs.map((job) => job.storageKey));
+  } catch (error) {
+    console.error("[report-delete] raw upload cleanup failed", error);
+    return NextResponse.json({ error: "Temporary analysis data could not be removed. Please try again." }, { status: 503 });
+  }
   const deleted = await prisma.report.deleteMany({ where: { id, userId: session.user.id } });
   if (!deleted.count) return NextResponse.json({ error: "Report not found." }, { status: 404 });
   return NextResponse.json({ ok: true });

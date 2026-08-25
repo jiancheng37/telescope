@@ -261,19 +261,30 @@ export function DashboardWorkspace({ initialReports, initialCollections, onSnaps
     const collectionId = addingToCollection.id;
     setWorking(`add:${collectionId}`);
     try {
-      const responses = await Promise.all(selected.map((report) => fetch(`/api/reports/${report.id}/collections`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ collectionIds: [...report.collectionIds, collectionId] }),
-      })));
-      if (responses.some((response) => !response.ok)) throw new Error();
-      const selectedIds = new Set(selected.map((report) => report.id));
-      setReports((current) => current.map((report) => selectedIds.has(report.id) ? { ...report, collectionIds: [...report.collectionIds, collectionId] } : report));
-      setCollections((current) => current.map((item) => item.id === collectionId ? { ...item, count: item.count + selected.length } : item));
-      setAddingToCollection(null);
-      setAddingDraft([]);
-      setAddingQuery("");
-      flash(`${selected.length} conversation${selected.length === 1 ? "" : "s"} added.`);
+      const results = await Promise.all(selected.map(async (report) => {
+        try {
+          const response = await fetch(`/api/reports/${report.id}/collections`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ collectionIds: [...report.collectionIds, collectionId] }),
+          });
+          return response.ok ? report.id : null;
+        } catch {
+          return null;
+        }
+      }));
+      const addedIds = new Set(results.filter((id): id is string => Boolean(id)));
+      setReports((current) => current.map((report) => addedIds.has(report.id) ? { ...report, collectionIds: [...report.collectionIds, collectionId] } : report));
+      setCollections((current) => current.map((item) => item.id === collectionId ? { ...item, count: item.count + addedIds.size } : item));
+      if (addedIds.size === selected.length) {
+        setAddingToCollection(null);
+        setAddingDraft([]);
+        setAddingQuery("");
+        flash(`${selected.length} conversation${selected.length === 1 ? "" : "s"} added.`);
+      } else {
+        setAddingDraft((current) => current.filter((id) => !addedIds.has(id)));
+        flash(`${addedIds.size} added; ${selected.length - addedIds.size} could not be added.`);
+      }
     } catch { flash("The conversations could not be added."); }
     finally { setWorking(null); }
   };

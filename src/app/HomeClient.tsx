@@ -300,10 +300,17 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       if (viewer) {
         setPhase({ kind: "working", note: "saving your group report" });
         const evidence = syncableReportEvidence({ extremes: extremeEvidence, doubleText: doubleTextEvidence, stickers: stickerVisuals });
-        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analysis) });
+        const essentialEvidence = { ...evidence, stickers: undefined };
+        const response = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ analysis, evidence: essentialEvidence }) });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
-          void syncReportEvidence(reportId, evidence).catch(() => undefined);
+          if (evidence.stickers) {
+            try {
+              await syncReportEvidence(reportId, { stickers: evidence.stickers });
+            } catch {
+              setSaveWarning("The group report was saved, but its optional sticker artwork could not be synced.");
+            }
+          }
           invalidateDashboardData();
         } else {
           const body = await response.json().catch(() => null) as { error?: string } | null;
@@ -370,14 +377,21 @@ export default function HomeClient({ viewer, startView = "landing" }: { viewer: 
       if (viewer) {
         setPhase({ kind: "working", note: "saving your report" });
         const evidence = syncableReportEvidence({ doubleText: doubleTextMessages, extremes: extremeEvidence, stickers: stickerVisuals });
+        const essentialEvidence = { ...evidence, stickers: undefined };
         const response = await fetch("/api/reports", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(analysis),
+          body: JSON.stringify({ analysis, evidence: essentialEvidence }),
         });
         if (response.ok) {
           reportId = ((await response.json()) as { id: string }).id;
-          void syncReportEvidence(reportId, evidence).catch(() => undefined);
+          if (evidence.stickers) {
+            try {
+              await syncReportEvidence(reportId, { stickers: evidence.stickers });
+            } catch {
+              setSaveWarning("The report was saved, but its optional sticker artwork could not be synced.");
+            }
+          }
           invalidateDashboardData();
         } else {
           const body = (await response.json().catch(() => null)) as { error?: string } | null;

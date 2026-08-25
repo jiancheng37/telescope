@@ -23,6 +23,8 @@ const VISIBILITY_SECONDS = 15 * 60;
 let stopping = false;
 let nextMaintenanceAt = 0;
 
+class NonRetryableJobError extends Error {}
+
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   enabled: Boolean(process.env.SENTRY_DSN),
@@ -63,7 +65,7 @@ async function processJob(jobId: string) {
       participantA: true,
       participantB: true,
       attempts: true,
-      report: { select: { kind: true, analysis: true } },
+      report: { select: { kind: true, chatId: true, analysis: true } },
     },
   });
   if (!job) {
@@ -84,32 +86,35 @@ async function processJob(jobId: string) {
       console.log(`[analysis-worker] job ${job.id} ${note}`);
       void prisma.analysisJob.updateMany({
         where: { id: job.id, status: "PROCESSING" },
-        data: { stage: note.slice(0, 500) },
+        data: { stage: note.slice(0, 500), startedAt: new Date() },
       }).catch((error) => console.error("[analysis-worker] couldn't persist progress", error));
     };
     if (job.report.kind === "GROUP") {
+      const parsedGroup = parseGroupExport(decoded);
+      if (job.report.chatId !== `group:${parsedGroup.chat.id}`) {
+        throw new NonRetryableJobError("That export belongs to a different Telegram group.");
+      }
       const saved = job.report.analysis as unknown as GroupAnalysis;
       const displayNames = new Map(saved.participants.map((person) => [person.id, person.name]));
-      const selected = selectGroupParticipants(parseGroupExport(decoded), new Set(displayNames.keys()), displayNames);
+      const selected = selectGroupParticipants(parsedGroup, new Set(displayNames.keys()), displayNames);
       const analysis = analyzeGroup(selected);
       console.log(`[analysis-worker] job ${job.id} parsed ${analysis.totalMessages.toLocaleString()} group messages`);
       const payload = await runGroupReading(selected, analysis, { onProgress: progress });
       const evidenceIds = new Set([...(payload.topics ?? payload.themes ?? []), ...payload.roles, ...(payload.eras ?? []), ...(payload.lore ?? [])].flatMap((item) => item.evidenceMessageIds));
       const groupAiEvidence = selected.messages.filter((message) => evidenceIds.has(message.id)).map((message) => ({ id: message.id, ts: message.ts, participantId: message.participantId, body: message.text.trim() || (message.media ? "[Media]" : "[Empty message]") }));
-      await completeGroupReport(job.reportId, job.userId, analysis, payload, groupAiEvidence);
+      await completeGroupReport(job.reportId, job.userId, analysis, payload, groupAiEvidence, job.id);
     } else {
       const { parsed, analysis } = analyze(decoded);
+      if (job.report.chatId !== String(parsed.chat.id)) {
+        throw new NonRetryableJobError("That export belongs to a different Telegram chat.");
+      }
       console.log(`[analysis-worker] job ${job.id} parsed ${analysis.volume.total.toLocaleString()} messages`);
       parsed.chat.participants = [job.participantA, job.participantB];
       analysis.chat.participants = [job.participantA, job.participantB];
       const result = await runWrapped(parsed, analysis, { onProgress: progress });
-      await completeReport(job.reportId, job.userId, analysis, toWire(result));
+      await completeReport(job.reportId, job.userId, analysis, toWire(result), job.id);
     }
     finished = true;
-    await prisma.analysisJob.update({
-      where: { id: job.id },
-      data: { status: "COMPLETE", stage: "Report ready", error: null, completedAt: new Date() },
-    });
     console.log(
       `[analysis-worker] job ${job.id} complete in ${((Date.now() - startedAt) / 1_000).toFixed(1)}s`,
     );
@@ -119,24 +124,26 @@ async function processJob(jobId: string) {
     const message = error instanceof Error ? error.message : "The analysis worker failed.";
     console.error(`[analysis-worker] job ${job.id}`, error);
     Sentry.captureException(error, { tags: { component: "analysis-worker", jobId: job.id } });
-    if (job.attempts < MAX_ATTEMPTS) {
+    if (!(error instanceof NonRetryableJobError) && job.attempts < MAX_ATTEMPTS) {
       console.warn(
         `[analysis-worker] job ${job.id} queued for retry (${job.attempts}/${MAX_ATTEMPTS})`,
       );
-      await prisma.analysisJob.update({
-        where: { id: job.id },
+      const requeued = await prisma.analysisJob.updateMany({
+        where: { id: job.id, status: "PROCESSING" },
         data: { status: "QUEUED", stage: "Waiting to retry", error: message.slice(0, 1_000) },
       });
+      if (requeued.count !== 1) return { handled: true, storageKey: job.storageKey };
       return { handled: false, storageKey: null };
     }
     console.error(`[analysis-worker] job ${job.id} failed after ${job.attempts} attempts`);
-    await prisma.$transaction([
-      prisma.analysisJob.update({
-        where: { id: job.id },
+    await prisma.$transaction(async (tx) => {
+      const failed = await tx.analysisJob.updateMany({
+        where: { id: job.id, status: "PROCESSING" },
         data: { status: "FAILED", stage: null, error: message.slice(0, 1_000), completedAt: new Date() },
-      }),
-      prisma.report.update({ where: { id: job.reportId }, data: { status: "COMPLETE" } }),
-    ]);
+      });
+      if (failed.count !== 1) return;
+      await tx.report.updateMany({ where: { id: job.reportId, status: "PROCESSING" }, data: { status: "COMPLETE" } });
+    });
     return { handled: true, storageKey: job.storageKey };
   }
 }

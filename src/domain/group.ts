@@ -43,6 +43,11 @@ export interface GroupParticipantStats {
   lastTs: number;
 }
 
+/** Stable identity for one selected set of Telegram group participants. */
+export function groupParticipantSetKey(participants: ReadonlyArray<{ id: string }>): string {
+  return JSON.stringify([...new Set(participants.map((participant) => participant.id))].sort());
+}
+
 export interface GroupAnalysis {
   kind: "group";
   chat: { id: number; name: string; type: string };

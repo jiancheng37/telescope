@@ -1,6 +1,6 @@
 import { ReportStatus, Prisma } from "@/generated/prisma/client";
 import type { Analysis } from "@/domain/types";
-import type { GroupAnalysis } from "@/domain/group";
+import { groupParticipantSetKey, type GroupAnalysis } from "@/domain/group";
 import type { WirePayload } from "@/ui/wire";
 import type { GroupAiPayload } from "@/llm/group";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +13,7 @@ export async function saveLocalReport(userId: string, analysis: Analysis, eviden
   const data = {
       userId,
       chatId: String(analysis.chat.id),
+      participantSetKey: "direct",
       status: ReportStatus.COMPLETE,
       title: `${analysis.chat.participants[0]} & ${analysis.chat.participants[1]}`,
       participantA: analysis.chat.participants[0],
@@ -27,7 +28,7 @@ export async function saveLocalReport(userId: string, analysis: Analysis, eviden
       completedAt: new Date(),
     } satisfies Prisma.ReportUncheckedCreateInput;
   return prisma.report.upsert({
-    where: { userId_chatId: { userId, chatId: String(analysis.chat.id) } },
+    where: { userId_chatId_participantSetKey: { userId, chatId: String(analysis.chat.id), participantSetKey: "direct" } },
     create: data,
     update: {
       status: data.status,
@@ -40,7 +41,11 @@ export async function saveLocalReport(userId: string, analysis: Analysis, eviden
       hasAiInsights: false,
       analysis: data.analysis,
       llm: Prisma.DbNull,
-      ...(privateEvidence ? { privateEvidence } : {}),
+      privateEvidence: privateEvidence ?? Prisma.DbNull,
+      sharedEvidence: Prisma.DbNull,
+      shareToken: null,
+      shareMessagesToken: null,
+      sharedMessagesVisible: false,
       completedAt: data.completedAt,
     },
     select: { id: true },
@@ -61,6 +66,7 @@ export async function saveLocalGroupReport(userId: string, analysis: GroupAnalys
   const data = {
     userId,
     chatId: `group:${analysis.chat.id}`,
+    participantSetKey: groupParticipantSetKey(analysis.participants),
     kind: "GROUP" as const,
     status: ReportStatus.COMPLETE,
     title: analysis.chat.name,
@@ -77,7 +83,7 @@ export async function saveLocalGroupReport(userId: string, analysis: GroupAnalys
     completedAt: new Date(),
   } satisfies Prisma.ReportUncheckedCreateInput;
   return prisma.report.upsert({
-    where: { userId_chatId: { userId, chatId: data.chatId } },
+    where: { userId_chatId_participantSetKey: { userId, chatId: data.chatId, participantSetKey: data.participantSetKey } },
     create: data,
     update: {
       kind: data.kind,
@@ -92,7 +98,11 @@ export async function saveLocalGroupReport(userId: string, analysis: GroupAnalys
       hasAiInsights: false,
       analysis: data.analysis,
       llm: Prisma.DbNull,
-      ...(privateEvidence ? { privateEvidence } : {}),
+      privateEvidence: privateEvidence ?? Prisma.DbNull,
+      sharedEvidence: Prisma.DbNull,
+      shareToken: null,
+      shareMessagesToken: null,
+      sharedMessagesVisible: false,
       completedAt: data.completedAt,
     },
     select: { id: true },
@@ -118,7 +128,7 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
       return claimed.count === 1 ? savedReportId : null;
     }
     const existing = await tx.report.findUnique({
-      where: { userId_chatId: { userId, chatId: String(analysis.chat.id) } },
+      where: { userId_chatId_participantSetKey: { userId, chatId: String(analysis.chat.id), participantSetKey: "direct" } },
       select: { id: true },
     });
     if (existing) {
@@ -143,6 +153,7 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
       data: {
         userId,
         chatId: String(analysis.chat.id),
+        participantSetKey: "direct",
         title: `${analysis.chat.participants[0]} & ${analysis.chat.participants[1]}`,
         participantA: analysis.chat.participants[0],
         participantB: analysis.chat.participants[1],
@@ -160,22 +171,38 @@ export async function reserveReport(userId: string, analysis: Analysis, savedRep
 const json = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
-export async function completeReport(id: string, userId: string, analysis: Analysis, llm: WirePayload) {
-  await prisma.report.update({
-    where: { id, userId },
-    data: {
-      status: ReportStatus.COMPLETE,
-      analysis: json(analysis),
-      llm: json(llm),
-      messageCount: analysis.volume.total,
-      hasAiInsights: true,
-      completedAt: new Date(),
-    },
+export async function completeReport(id: string, userId: string, analysis: Analysis, llm: WirePayload, jobId?: string) {
+  await prisma.$transaction(async (tx) => {
+    if (jobId) {
+      const completed = await tx.analysisJob.updateMany({
+        where: { id: jobId, reportId: id, userId, status: "PROCESSING" },
+        data: { status: "COMPLETE", stage: "Report ready", error: null, completedAt: new Date() },
+      });
+      if (completed.count !== 1) throw new Error("The analysis job is no longer active.");
+    }
+    await tx.report.update({
+      where: { id, userId },
+      data: {
+        status: ReportStatus.COMPLETE,
+        analysis: json(analysis),
+        llm: json(llm),
+        messageCount: analysis.volume.total,
+        hasAiInsights: true,
+        completedAt: new Date(),
+      },
+    });
   });
 }
 
-export async function completeGroupReport(id: string, userId: string, analysis: GroupAnalysis, llm: GroupAiPayload, groupAi?: unknown) {
+export async function completeGroupReport(id: string, userId: string, analysis: GroupAnalysis, llm: GroupAiPayload, groupAi?: unknown, jobId?: string) {
   await prisma.$transaction(async (tx) => {
+    if (jobId) {
+      const completed = await tx.analysisJob.updateMany({
+        where: { id: jobId, reportId: id, userId, status: "PROCESSING" },
+        data: { status: "COMPLETE", stage: "Report ready", error: null, completedAt: new Date() },
+      });
+      if (completed.count !== 1) throw new Error("The analysis job is no longer active.");
+    }
     const saved = await tx.report.findUnique({ where: { id, userId }, select: { privateEvidence: true } });
     const existing = saved?.privateEvidence && typeof saved.privateEvidence === "object" && !Array.isArray(saved.privateEvidence)
       ? saved.privateEvidence as Record<string, unknown>

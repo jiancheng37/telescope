@@ -107,42 +107,49 @@ export async function POST(request: Request) {
   })).catch((error) => {
     console.error("[analysis-job] stale upload cleanup failed", error);
   })));
-  const [active, recentJobs] = await Promise.all([
-    prisma.analysisJob.findFirst({
-      where: { userId: session.user.id, status: { in: ["AWAITING_UPLOAD", "QUEUED", "PROCESSING"] } },
-      select: { id: true },
-    }),
-    prisma.analysisJob.count({
-      where: {
-        userId: session.user.id,
-        status: "COMPLETE",
-        completedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1_000) },
-      },
-    }),
-  ]);
-  if (active) {
-    return NextResponse.json({ error: "Finish the current AI analysis before starting another." }, { status: 409 });
-  }
-  if (recentJobs >= dailyAnalysisLimit()) {
-    return NextResponse.json({ error: "The daily AI analysis limit has been reached." }, { status: 429 });
-  }
-
   const { s3, bucket } = infrastructure;
   const jobId = randomUUID();
   const storageKey = `analysis-uploads/${session.user.id}/${jobId}/result.json`;
-  await prisma.analysisJob.create({
-    data: {
-      id: jobId,
-      userId: session.user.id,
-      reportId,
-      storageKey,
-      uploadBytes,
-      participantA: participants?.[0] ?? report.participantA,
-      participantB: participants?.[1] ?? report.participantB,
-      expiresAt: new Date(Date.now() + ANALYSIS_JOB_TTL_MS),
-      stage: "Waiting for the private upload",
-    },
+  const reservation = await prisma.$transaction(async (tx) => {
+    // Serialize reservations for this user. The product permits one active AI
+    // job per account, and a read-then-create check alone is raceable.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${session.user.id}, 0))`;
+    const [active, recentJobs] = await Promise.all([
+      tx.analysisJob.findFirst({
+        where: { userId: session.user.id, status: { in: ["AWAITING_UPLOAD", "QUEUED", "PROCESSING"] } },
+        select: { id: true },
+      }),
+      tx.analysisJob.count({
+        where: {
+          userId: session.user.id,
+          status: "COMPLETE",
+          completedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1_000) },
+        },
+      }),
+    ]);
+    if (active) return "active" as const;
+    if (recentJobs >= dailyAnalysisLimit()) return "limited" as const;
+    await tx.analysisJob.create({
+      data: {
+        id: jobId,
+        userId: session.user.id,
+        reportId,
+        storageKey,
+        uploadBytes,
+        participantA: participants?.[0] ?? report.participantA,
+        participantB: participants?.[1] ?? report.participantB,
+        expiresAt: new Date(Date.now() + ANALYSIS_JOB_TTL_MS),
+        stage: "Waiting for the private upload",
+      },
+    });
+    return "created" as const;
   });
+  if (reservation === "active") {
+    return NextResponse.json({ error: "Finish the current AI analysis before starting another." }, { status: 409 });
+  }
+  if (reservation === "limited") {
+    return NextResponse.json({ error: "The daily AI analysis limit has been reached." }, { status: 429 });
+  }
 
   try {
     const uploadUrl = await getSignedUrl(
