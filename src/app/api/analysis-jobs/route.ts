@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   const reservation = await prisma.$transaction(async (tx) => {
     // Serialize reservations for this user. The product permits one active AI
     // job per account, and a read-then-create check alone is raceable.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${session.user.id}, 0))`;
+    await tx.$queryRaw`SELECT 1::INTEGER AS "locked" FROM pg_advisory_xact_lock(hashtextextended(${session.user.id}, 0))`;
     const [active, recentJobs] = await Promise.all([
       tx.analysisJob.findFirst({
         where: { userId: session.user.id, status: { in: ["AWAITING_UPLOAD", "QUEUED", "PROCESSING"] } },
